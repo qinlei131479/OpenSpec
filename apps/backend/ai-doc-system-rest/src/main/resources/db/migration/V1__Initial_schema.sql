@@ -57,5 +57,7 @@ CREATE TABLE doc_generator.document_blocks (
   FULLTEXT INDEX ft_content (content)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+
 -- SELECT 'Database schema created successfully!' as message;
 

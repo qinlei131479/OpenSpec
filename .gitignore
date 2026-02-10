@@ -7,15 +7,11 @@ apps/backend/ai-doc-system-rest/target/*
 reference
 apps/agent/tests/*
 apps/agent/logs/*
-.claude/
-CLAUDE.md
+.claude/*
 
-# 环境变量文件（含敏感信息）
-apps/backend/.env
-apps/agent/.env
-deploy/docker/.env
-deploy/docker/.env.pro
-
-# IDE
+# License 敏感文件
+apps/backend/keys/private.key
+apps/backend/*.lic
+*.lic
 apps/backend/.idea/*
 nul

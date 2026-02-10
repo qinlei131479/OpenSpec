@@ -7,18 +7,27 @@
 
 set -e
 
+# CI 环境: 确保 GitHub SSH host key 可信
+if [ -n "$CI" ]; then
+    mkdir -p ~/.ssh
+    ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+fi
+
 # --- 配置 ---
-OPENSPEC_REPO="git@github.com:zhuzhaoyun/openspec.git"
+OPENSPEC_REPO="git@github.com:zhuzhaoyun/OpenSpec.git"
 OPENSPEC_BRANCH="main"
-WORK_DIR=$(mktemp -d)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORK_DIR=$(mktemp -d)
+
+SOURCE_HASH=$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 echo "=== OpenSpec Sync Script ==="
 echo "商业版目录: $PROJECT_ROOT"
+echo "源 commit: $SOURCE_HASH"
 echo "临时工作目录: $WORK_DIR"
 
-# --- Step 1: 浅克隆商业版到临时目录 ---
+# --- Step 1: 复制商业版代码到临时目录 ---
 echo ""
 echo "[1/7] 复制商业版代码到临时目录..."
 cp -r "$PROJECT_ROOT/." "$WORK_DIR/"
@@ -82,43 +91,58 @@ echo "[4/7] 修改配置文件..."
 sed -i '/<module>ai-doc-system-license<\/module>/d' apps/backend/pom.xml
 sed -i '/<module>ai-doc-system-license-gen<\/module>/d' apps/backend/pom.xml
 
-# 4.2 service pom.xml - 移除 license 依赖
-sed -i '/<artifactId>ai-doc-system-license<\/artifactId>/,+2d' apps/backend/ai-doc-system-service/pom.xml
-# 也删除对应的 groupId 和 version 行（依赖块）
-sed -i '/<groupId>com.aiid<\/groupId>/{N;/<artifactId>ai-doc-system-license<\/artifactId>/,+1d}' apps/backend/ai-doc-system-service/pom.xml 2>/dev/null || true
+# 4.2 service pom.xml - 移除 license 依赖（删除整个 dependency 块）
+python3 -c "
+import re
+with open('apps/backend/ai-doc-system-service/pom.xml', 'r') as f:
+    content = f.read()
+content = re.sub(r'\s*<dependency>\s*<groupId>com\.aiid</groupId>\s*<artifactId>ai-doc-system-license</artifactId>\s*<version>[^<]*</version>\s*</dependency>', '', content)
+with open('apps/backend/ai-doc-system-service/pom.xml', 'w') as f:
+    f.write(content)
+" 2>/dev/null || {
+    # fallback: sed
+    sed -i '/<artifactId>ai-doc-system-license<\/artifactId>/{ N; N; d; }' apps/backend/ai-doc-system-service/pom.xml
+}
 
 # 4.3 application.yml - 移除 license 配置段
 sed -i '/^# 授权配置$/,/^$/d' apps/backend/ai-doc-system-rest/src/main/resources/application.yml
+sed -i '/^license:/,/^$/d' apps/backend/ai-doc-system-rest/src/main/resources/application.yml
 
 # 4.4 application-prod.yml - 替换敏感默认值
 sed -i 's|jdbc:mysql://8\.138\.233\.196:3306|jdbc:mysql://localhost:3306|g' apps/backend/ai-doc-system-rest/src/main/resources/application-prod.yml
 sed -i 's|6VBG\*!bkeW|rootpass123|g' apps/backend/ai-doc-system-rest/src/main/resources/application-prod.yml
 
-# 4.5 SQL - 移除 template 相关表（从 "-- 8. 模板标签表" 到文件末尾的 INSERT 语句之后）
-sed -i '/^-- 8\. 模板标签表$/,/^-- SELECT/{ /^-- SELECT/!d }' apps/backend/ai-doc-system-rest/src/main/resources/db/migration/V1__Initial_schema.sql
-# 同样处理 script/backend/initial_schema.sql
-sed -i '/^-- 8\. 模板标签表$/,/^-- SELECT/{ /^-- SELECT/!d }' script/backend/initial_schema.sql
+# 4.5 SQL - 移除 template 相关表
+python3 -c "
+import re
+for sql_file in ['apps/backend/ai-doc-system-rest/src/main/resources/db/migration/V1__Initial_schema.sql', 'script/backend/initial_schema.sql']:
+    try:
+        with open(sql_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        # 删除从 '-- 8. 模板标签表' 到 INSERT 语句结束
+        content = re.sub(r'-- 8\. 模板标签表.*?体育场馆.*?\);', '', content, flags=re.DOTALL)
+        with open(sql_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+    except FileNotFoundError:
+        pass
+"
 
 # --- Step 5: 修改 Docker 配置 ---
 echo "[5/7] 修改 Docker 配置..."
 
 # docker-compose.yml: 移除 license volume 和 env
-sed -i '/LICENSE_FILE.*license\.lic.*:ro$/d' deploy/docker/docker-compose.yml
+sed -i '/LICENSE_FILE.*license\.lic/d' deploy/docker/docker-compose.yml
 sed -i '/LICENSE_PATH:/d' deploy/docker/docker-compose.yml
-# 如果 volumes 段变空则删除
-sed -i '/^    volumes:$/{N;/^\s*$/d}' deploy/docker/docker-compose.yml 2>/dev/null || true
 
 # archspec -> openspec 品牌替换
-sed -i 's/archspec-web/openspec-web/g' deploy/docker/docker-compose.yml
-sed -i 's/archspec-backend/openspec-backend/g' deploy/docker/docker-compose.yml
-sed -i 's/archspec-agent/openspec-agent/g' deploy/docker/docker-compose.yml
-sed -i 's/archspec-postgres/openspec-postgres/g' deploy/docker/docker-compose.yml
-sed -i 's/archspec-net/openspec-net/g' deploy/docker/docker-compose.yml
 sed -i 's/archspec/openspec/g' deploy/docker/docker-compose.yml
 
 # 删除 pro 配置
 rm -f deploy/docker/docker-compose-pro.yml
 rm -f deploy/docker/.env.pro
+
+# 删除 license.lic 文件
+rm -f apps/backend/license.lic deploy/docker/license.lic
 
 # --- Step 6: 清理敏感信息 ---
 echo "[6/7] 清理敏感信息..."
@@ -164,12 +188,12 @@ while True:
 PYEOF
 
 # 文档中的内部 URL 替换
-sed -i 's|https://rag\.aizzyun\.com|http://your-ragflow-host:9380|g' docs/analysis/单章节生成流程分析.md 2>/dev/null || true
-sed -i 's|https://rag\.aizzyun\.com|http://your-ragflow-host:9380|g' docs/api/API_接口文档.md 2>/dev/null || true
+find docs -name "*.md" -exec sed -i 's|https://rag\.aizzyun\.com|http://your-ragflow-host:9380|g' {} + 2>/dev/null || true
 
 # --- Step 7: 删除文档和内部文件 ---
 echo "[7/7] 删除内部文档..."
 rm -f CLAUDE.md README.md AGENT.md MEMORY_IMPLEMENTATION_GUIDE.md
+rm -f apps/backend/README.md apps/backend/README-Docker.md
 rm -f docs/architecture/md2cad_integration.md
 rm -f docs/template-metadata-implementation.md
 rm -rf .claude/
@@ -181,12 +205,8 @@ echo "=== 清理完成，准备同步到 OpenSpec ==="
 OPENSPEC_LOCAL=$(mktemp -d)
 echo "克隆 openspec 仓库到: $OPENSPEC_LOCAL"
 git clone "$OPENSPEC_REPO" "$OPENSPEC_LOCAL" 2>/dev/null || {
-    echo "首次同步，初始化空仓库..."
-    mkdir -p "$OPENSPEC_LOCAL"
-    cd "$OPENSPEC_LOCAL"
-    git init
-    git remote add origin "$OPENSPEC_REPO"
-    cd "$WORK_DIR"
+    echo "克隆失败，请检查仓库地址和权限"
+    exit 1
 }
 
 # 清空 openspec 仓库内容（保留 .git）
@@ -194,7 +214,6 @@ find "$OPENSPEC_LOCAL" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 
 # 复制清理后的代码
 cp -r "$WORK_DIR/." "$OPENSPEC_LOCAL/"
-rm -rf "$OPENSPEC_LOCAL/.git.bak" 2>/dev/null || true
 
 cd "$OPENSPEC_LOCAL"
 git add -A
@@ -203,7 +222,7 @@ git add -A
 if git diff --cached --quiet; then
     echo "没有变更需要同步。"
 else
-    COMMIT_MSG="sync: update from ArchSpec-Pro $(date +%Y-%m-%d)"
+    COMMIT_MSG="sync: update from ArchSpec-Pro ${SOURCE_HASH} $(date +%Y-%m-%d)"
     git commit -m "$COMMIT_MSG"
     git push origin "$OPENSPEC_BRANCH"
     echo "=== 同步完成! ==="

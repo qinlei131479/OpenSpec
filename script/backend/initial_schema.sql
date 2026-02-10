@@ -139,5 +139,7 @@ CREATE TABLE doc_generator.document_blocks (
 -- LEFT JOIN document_blocks db ON d.id = db.document_id AND db.is_deleted = FALSE
 -- GROUP BY d.id;
 
+
+
 -- SELECT 'Database schema created successfully!' as message;
 
