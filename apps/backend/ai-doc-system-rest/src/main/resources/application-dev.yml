@@ -1,0 +1,22 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/doc_generator?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: rootpass123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      
+      mode: always
+      data-locations: classpath:data.sql
+
+logging:
+  level:
+    com.aiid.aidoc: DEBUG
+
+

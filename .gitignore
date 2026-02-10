@@ -1,0 +1,21 @@
+target/
+!apps/backend/ai-doc-system-rest/target/
+apps/backend/ai-doc-system-rest/target/*
+!apps/backend/ai-doc-system-rest/target/ai-doc-system-rest-1.0.0.jar
+*.pyc
+.trae/
+reference
+apps/agent/tests/*
+apps/agent/logs/*
+.claude/
+CLAUDE.md
+
+# 环境变量文件（含敏感信息）
+apps/backend/.env
+apps/agent/.env
+deploy/docker/.env
+deploy/docker/.env.pro
+
+# IDE
+apps/backend/.idea/*
+nul

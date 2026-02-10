@@ -1,0 +1,21 @@
+services:
+  # 1. Frontend (Web)
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: docker/Dockerfile
+    image: ${DOCKER_REGISTRY:-}archspec-web:${TAG:-latest}
+
+  # 2. Backend (Java)
+  backend:
+    build:
+      context: ../../apps/backend
+      dockerfile: Dockerfile
+    image: ${DOCKER_REGISTRY:-}archspec-backend:${TAG:-latest}
+
+  # 3. AI Agent (Python)
+  agent:
+    build:
+      context: ../../apps/agent
+      dockerfile: Dockerfile
+    image: ${DOCKER_REGISTRY:-}archspec-agent:${TAG:-latest}

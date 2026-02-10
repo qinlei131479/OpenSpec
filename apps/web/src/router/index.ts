@@ -1,0 +1,84 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
+import Editor from '../views/Editor.vue'
+import DocumentWizard from '../views/DocumentWizard.vue'
+import Login from '../views/Login.vue'
+import ProjectQA from '../views/ProjectQA.vue'
+import Settings from '../views/Settings.vue'
+import TemplateDetail from '../views/TemplateDetail.vue'
+import { authStorage } from '../utils/auth'
+
+const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/',
+    redirect: '/editor'
+  },
+  {
+    path: '/wizard',
+    name: 'DocumentWizard',
+    component: DocumentWizard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/editor/:id?',
+    name: 'Editor',
+    component: Editor,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/qa',
+    name: 'ProjectQA',
+    component: ProjectQA,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: Settings,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/template/:id',
+    name: 'TemplateDetail',
+    component: TemplateDetail,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes
+})
+
+// 路由守卫：检查登录状态
+router.beforeEach((to, from, next) => {
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+  const isAuthenticated = authStorage.isAuthenticated()
+
+  // 如果路由需要认证但用户未登录，重定向到登录页
+  if (requiresAuth && !isAuthenticated) {
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath } // 保存原始路径，登录后可以跳转回去
+    })
+  } 
+  // 如果已登录用户访问登录页，重定向到首页
+  else if (to.path === '/login' && isAuthenticated) {
+    next('/')
+  } 
+  else {
+    next()
+  }
+})
+
+export default router
