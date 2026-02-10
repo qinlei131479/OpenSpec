@@ -52,11 +52,16 @@ TODO: 在此处添加产品介绍视频
 > 产品演示视频即将上线，敬请期待。
 
 ## UI 展示
+<img width="2809" height="1587" alt="image" src="https://github.com/user-attachments/assets/2d67e1a4-a779-43b7-a770-a07deb649711" />
 
-<!--
-TODO: 在此处替换为正式的产品截图
-建议包含：首页/项目列表、文档编辑器、AI 对话助手、知识库检索、导出预览等核心页面
--->
+<img width="2820" height="1584" alt="image" src="https://github.com/user-attachments/assets/efcae9fa-bf8d-4b53-93f6-2d49e6119042" />
+
+<img width="2826" height="1578" alt="image" src="https://github.com/user-attachments/assets/889a30b5-d014-46ca-84e4-26334f6076ba" />
+
+<img width="2758" height="1529" alt="image" src="https://github.com/user-attachments/assets/1b04355c-709a-4a33-9e39-ac7d04ce483c" />
+
+
+
 
 <table style="border-collapse: collapse; border: 1px solid black;">
   <tr>
