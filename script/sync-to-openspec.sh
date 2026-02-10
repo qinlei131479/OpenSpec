@@ -197,6 +197,7 @@ rm -f apps/backend/README.md apps/backend/README-Docker.md
 rm -f docs/architecture/md2cad_integration.md
 rm -f docs/template-metadata-implementation.md
 rm -rf .claude/
+rm -rf .github/
 
 echo ""
 echo "=== 清理完成，准备同步到 OpenSpec ==="
