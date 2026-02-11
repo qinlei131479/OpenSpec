@@ -7,11 +7,9 @@ apps/backend/ai-doc-system-rest/target/*
 reference
 apps/agent/tests/*
 apps/agent/logs/*
-.claude/*
-
+docs/*
 # License 敏感文件
-apps/backend/keys/private.key
-apps/backend/*.lic
+
 *.lic
 apps/backend/.idea/*
 nul
