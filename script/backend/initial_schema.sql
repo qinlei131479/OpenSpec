@@ -139,7 +139,100 @@ CREATE TABLE doc_generator.document_blocks (
 -- LEFT JOIN document_blocks db ON d.id = db.document_id AND db.is_deleted = FALSE
 -- GROUP BY d.id;
 
+-- 8. 模板标签表
+DROP TABLE IF EXISTS doc_generator.template_tags;
+CREATE TABLE doc_generator.template_tags (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL COMMENT '标签名称',
+  category ENUM('profession', 'business_type', 'custom') NOT NULL COMMENT '标签分类：profession-专业，business_type-业态，custom-自定义',
+  user_id BIGINT COMMENT '创建用户ID，系统标签为NULL',
+  is_system BOOLEAN DEFAULT FALSE COMMENT '是否系统标签',
+  sort_order INT DEFAULT 0 COMMENT '排序顺序',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_category (category),
+  INDEX idx_user (user_id),
+  UNIQUE KEY uk_name_category_user (name, category, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模板标签表';
 
+-- 9. 文档模板表
+DROP TABLE IF EXISTS doc_generator.document_template;
+CREATE TABLE doc_generator.document_template (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL COMMENT '模板名称',
+  description TEXT COMMENT '模板描述',
+  file_path VARCHAR(500) COMMENT '文件存储路径',
+  file_name VARCHAR(200) COMMENT '原始文件名',
+  file_size BIGINT COMMENT '文件大小（字节）',
+  file_type VARCHAR(50) COMMENT '文件类型（如：docx, pdf）',
+  content TEXT COMMENT '模板内容（解释后的文本）',
+  chapters JSON COMMENT '章节目录结构',
+  status ENUM('uploaded', 'parsing', 'success', 'failed') DEFAULT 'uploaded' COMMENT '状态：uploaded-已上传，parsing-解释中，success-解释成功，failed-解释失败',
+  error_message TEXT COMMENT '错误信息（解释失败时）',
+  user_id BIGINT NOT NULL COMMENT '上传用户ID',
+  is_standard BOOLEAN DEFAULT FALSE COMMENT '是否标准模板（供下载）',
+  download_count INT DEFAULT 0 COMMENT '下载次数',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_user_id (user_id),
+  INDEX idx_status (status),
+  INDEX idx_is_standard (is_standard),
+  INDEX idx_updated_at (updated_at),
+  FULLTEXT INDEX ft_name_content (name, description)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档模板表';
+
+-- 10. 文档模板与标签关联表
+DROP TABLE IF EXISTS doc_generator.document_template_tags;
+CREATE TABLE doc_generator.document_template_tags (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  template_id BIGINT NOT NULL COMMENT '模板ID',
+  tag_id BIGINT NOT NULL COMMENT '标签ID',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (template_id) REFERENCES doc_generator.document_template(id) ON DELETE CASCADE,
+  FOREIGN KEY (tag_id) REFERENCES doc_generator.template_tags(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_template_tag (template_id, tag_id),
+  INDEX idx_template (template_id),
+  INDEX idx_tag (tag_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档模板与标签关联表';
+
+-- 11. CAD模板表
+DROP TABLE IF EXISTS doc_generator.cad_template;
+CREATE TABLE doc_generator.cad_template (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL COMMENT 'CAD模板名称',
+  description TEXT COMMENT '模板描述',
+  file_path VARCHAR(500) NOT NULL COMMENT '文件存储路径',
+  file_name VARCHAR(200) NOT NULL COMMENT '原始文件名',
+  file_size BIGINT COMMENT '文件大小（字节）',
+  file_type VARCHAR(50) COMMENT '文件类型（如：dwg, dxf）',
+  user_id BIGINT NOT NULL COMMENT '上传用户ID',
+  download_count INT DEFAULT 0 COMMENT '下载次数',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_user_id (user_id),
+  UNIQUE KEY uk_user_template (user_id) COMMENT '每个用户只保留一份CAD模板'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='CAD模板表';
+
+-- 初始化系统标签数据
+INSERT INTO doc_generator.template_tags (name, category, is_system, sort_order) VALUES
+-- 专业标签
+('建筑', 'profession', TRUE, 1),
+('结构', 'profession', TRUE, 2),
+('暖通', 'profession', TRUE, 3),
+('给排水', 'profession', TRUE, 4),
+('电气', 'profession', TRUE, 5),
+('弱电', 'profession', TRUE, 6),
+('景观', 'profession', TRUE, 7),
+('室内', 'profession', TRUE, 8),
+-- 业态标签
+('学校', 'business_type', TRUE, 1),
+('医院', 'business_type', TRUE, 2),
+('工厂', 'business_type', TRUE, 3),
+('办公楼', 'business_type', TRUE, 4),
+('住宅', 'business_type', TRUE, 5),
+('商业综合体', 'business_type', TRUE, 6),
+('酒店', 'business_type', TRUE, 7),
+('体育场馆', 'business_type', TRUE, 8);
 
 -- SELECT 'Database schema created successfully!' as message;
 
