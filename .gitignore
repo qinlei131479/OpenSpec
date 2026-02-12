@@ -41,4 +41,12 @@ docs/
 # ===== 项目特定 =====
 apps/agent/tests/*
 apps/agent/logs/*
-reference/
+.claude/*
+
+# License 敏感文件
+apps/backend/keys/private.key
+apps/backend/*.lic
+*.lic
+apps/backend/.idea/*
+nul
+apps/backend/ai-doc-system-rest/target/ai-doc-system-rest-1.0.0.jar
