@@ -5,20 +5,19 @@ server:
 
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/doc_generator?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
-    username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:rootpass123}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/doc_generator?currentSchema=public}
+    username: ${SPRING_DATASOURCE_USERNAME:archspec}
+    password: ${SPRING_DATASOURCE_PASSWORD:archspec_doc_pass}
+    driver-class-name: org.postgresql.Driver
   jackson:
     default-property-inclusion: always
-  # Flyway数据库迁移配置
-  flyway:
-    enabled: true
-    baseline-on-migrate: true  # 对已存在的数据库启用baseline
-    baseline-version: 0  # baseline版本号
-    locations: classpath:db/migration  # 迁移脚本位置
-    encoding: UTF-8
-    validate-on-migrate: true  # 迁移时验证
+  # SQL 初始化配置（开发环境可设为 always，生产环境设为 never）
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:never}
+      schema-locations: classpath:db/init-schema.sql
+      data-locations: classpath:db/init-data.sql
+      continue-on-error: false
 
 mybatis-plus:
   configuration:
@@ -26,6 +25,7 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: INPUT
+      db-type: POSTGRE_SQL
 
 logging:
   level:

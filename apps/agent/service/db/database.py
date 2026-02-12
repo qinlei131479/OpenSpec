@@ -1,20 +1,30 @@
 import datetime
-from playhouse.pool import PooledMySQLDatabase
+from playhouse.pool import PooledPostgresqlDatabase
 from peewee import Model, CharField, DateTimeField
 
 # 本地测试，支持从 .env 文件读取数据库配置
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+# 从 POSTGRES_URL 解析数据库配置
+# 格式: postgresql://user:password@host:port/database
+postgres_url = os.getenv('POSTGRES_URL', 'postgresql://archspec:archspec_doc_pass@localhost:5433/doc_generator')
+
+# 解析 PostgreSQL URL
+from urllib.parse import urlparse
+parsed = urlparse(postgres_url)
+
 db_config = {
-    'host': os.getenv('MYSQL_HOST'),
-    'user': os.getenv('MYSQL_USER'),
-    'password': os.getenv('MYSQL_PASSWORD'),
-    'database': os.getenv('MYSQL_DATABASE')
+    'database': parsed.path[1:],  # 移除开头的 /
+    'user': parsed.username,
+    'password': parsed.password,
+    'host': parsed.hostname,
+    'port': parsed.port or 5432
 }
 
 # 创建连接池，增加连接池参数，防止长时间连接失效
-db = PooledMySQLDatabase(
+db = PooledPostgresqlDatabase(
     **db_config,
     max_connections=20,      # 可根据实际情况调整
     stale_timeout=300        # 连接最大空闲秒数，超时自动重连（如5分钟）

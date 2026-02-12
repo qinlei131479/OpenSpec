@@ -1,50 +1,43 @@
-# IDE & Editor
-.vscode/
+# ===== IDE =====
 .idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
 .trae/
 .claude/
-*.swp
-*.swo
-*~
 
-# OS
+# ===== OS =====
 .DS_Store
 Thumbs.db
+Desktop.ini
 nul
 
-# Java
+# ===== Java / Maven =====
 target/
-!apps/backend/ai-doc-system-rest/target/
-apps/backend/ai-doc-system-rest/target/*
-!apps/backend/ai-doc-system-rest/target/ai-doc-system-rest-1.0.0.jar
+*.class
+*.jar
+*.war
+*.ear
 
-# Python
+# ===== Python =====
 *.pyc
 __pycache__/
+*.pyo
 .venv/
+venv/
 *.egg-info/
 
-# Node
+# ===== Node.js =====
 node_modules/
 dist/
-
-# Logs
 *.log
-apps/agent/logs/*
 
-# Tests
-apps/agent/tests/*
-
-# Docs (generated)
-docs/*
-
-# License
+# ===== 敏感文件 =====
 *.lic
+apps/backend/keys/private.key
 
-# Env
-.env
-.env.local
-.env.*.local
-
-# Reference
+# ===== 项目特定 =====
+apps/agent/tests/*
+apps/agent/logs/*
 reference/

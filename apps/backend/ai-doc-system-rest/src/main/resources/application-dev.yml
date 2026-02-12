@@ -5,15 +5,24 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/doc_generator?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: root
-    password: rootpass123
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/doc_generator?currentSchema=public}
+    username: ${SPRING_DATASOURCE_USERNAME:archspec}
+    password: ${SPRING_DATASOURCE_PASSWORD:archspec_doc_pass}
+    driver-class-name: org.postgresql.Driver
   sql:
     init:
-      
-      mode: always
-      data-locations: classpath:data.sql
+      mode: ${SPRING_SQL_INIT_MODE:always}
+      schema-locations: classpath:db/init-schema.sql
+      data-locations: classpath:db/init-data.sql
+      continue-on-error: false
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: INPUT
+      db-type: POSTGRE_SQL
 
 logging:
   level:

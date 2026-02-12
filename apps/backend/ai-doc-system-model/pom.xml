@@ -28,6 +28,19 @@
             <artifactId>mybatis-plus-annotation</artifactId>
             <version>${mybatis-plus.version}</version>
         </dependency>
+        <!-- MyBatis for TypeHandler -->
+        <dependency>
+            <groupId>org.mybatis</groupId>
+            <artifactId>mybatis</artifactId>
+            <version>3.5.15</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- PostgreSQL JDBC Driver for PGobject -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>
 

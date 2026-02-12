@@ -1,4 +1,28 @@
 services:
+  # PostgreSQL 数据库服务（统一使用 PostgreSQL）
+  postgres:
+    image: postgres:15
+    container_name: ai-doc-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE:-doc_generator}
+      POSTGRES_USER: ${POSTGRES_USER:-archspec}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-archspec_doc_pass}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # 首次启动时自动执行初始化脚本
+      - ./ai-doc-system-rest/src/main/resources/db/init-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./ai-doc-system-rest/src/main/resources/db/init-data.sql:/docker-entrypoint-initdb.d/02-data.sql
+    networks:
+      - ai-doc-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-archspec} -d ${POSTGRES_DATABASE:-doc_generator}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Spring Boot 应用服务
   app:
@@ -11,12 +35,21 @@ services:
       - "${APP_PORT:-8080}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
-      SPRING_DATASOURCE_URL: jdbc:mysql://${MYSQL_HOST:-mysql}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-doc_generator}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-docuser}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-docpass123}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DATABASE:-doc_generator}?currentSchema=public
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-archspec}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-archspec_doc_pass}
+      # 生产环境禁用自动初始化（由 Docker 初始化脚本完成）
+      APP_DATABASE_INIT_ENABLED: ${APP_DATABASE_INIT_ENABLED:-false}
       TZ: Asia/Shanghai
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - ai-doc-network
+
+volumes:
+  postgres-data:
+    driver: local
 
 networks:
   ai-doc-network:

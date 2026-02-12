@@ -30,8 +30,8 @@ public class DocumentBlockServiceImpl implements DocumentBlockService {
         if (keyword != null && !keyword.isBlank()) {
             qw.like(DocumentBlock::getContent, keyword);
         }
-        // 使用二进制序确保严格的字节序排序，避免大小写不敏感排序导致的位置异常
-        qw.last("ORDER BY BINARY order_key ASC");
+        // PostgreSQL 默认使用字节序排序（case-sensitive），无需 BINARY 关键字
+        qw.orderByAsc(DocumentBlock::getOrderKey);
         return documentBlockMapper.selectPage(new Page<>(page, pageSize), qw);
     }
 
