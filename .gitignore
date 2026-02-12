@@ -36,6 +36,7 @@ dist/
 # ===== 敏感文件 =====
 *.lic
 apps/backend/keys/private.key
+docs/
 
 # ===== 项目特定 =====
 apps/agent/tests/*
