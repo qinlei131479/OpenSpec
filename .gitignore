@@ -1,16 +1,50 @@
+# IDE & Editor
+.vscode/
+.idea/
+.trae/
+.claude/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Java
 target/
 !apps/backend/ai-doc-system-rest/target/
 apps/backend/ai-doc-system-rest/target/*
 !apps/backend/ai-doc-system-rest/target/ai-doc-system-rest-1.0.0.jar
-*.pyc
-.trae/
-reference
-apps/agent/tests/*
-apps/agent/logs/*
-docs/*
-# License 敏感文件
 
+# Python
+*.pyc
+__pycache__/
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Logs
+*.log
+apps/agent/logs/*
+
+# Tests
+apps/agent/tests/*
+
+# Docs (generated)
+docs/*
+
+# License
 *.lic
-apps/backend/.idea/*
-nul
-apps/backend/ai-doc-system-rest/target/ai-doc-system-rest-1.0.0.jar
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Reference
+reference/
