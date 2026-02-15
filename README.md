@@ -57,6 +57,13 @@ OpenSpec was built to solve this pain point. Users simply input basic project in
   </tr>
 </table>
 
+## Online Demo
+
+Try OpenSpec online: [https://archspec.aizzyun.com/](https://archspec.aizzyun.com/)
+
+- Email: `test@qq.com`
+- Password: `test`
+
 ## Quick Start
 
 ### Requirements
