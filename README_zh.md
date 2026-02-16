@@ -137,6 +137,26 @@ mvn spring-boot:run
 
 </details>
 
+## 开源版 vs 企业版
+
+| 功能 | 开源版 | 企业版 |
+|------|:------:|:------:|
+| 智能检索与章节生成 | ✅ | ✅ |
+| 人机协作编辑 | ✅ | ✅ |
+| PDF / Markdown 导出 | ✅ | ✅ |
+| AutoCAD 插件（web 与 CAD 同步） | ❌ | ✅ |
+| 培训与答疑支持 | ❌ | ✅ |
+| 数据处理咨询 | ❌ | ✅ |
+
+### 联系我们
+
+如需了解企业版详情或商业合作，欢迎通过以下方式联系：
+
+- 邮箱：`dlutyaol@qq.com`
+- 企业微信：扫描下方二维码添加
+
+  <img src="docs/wechat_qr.png" alt="企业微信" width="200" />
+
 ## License
 
 Copyright (c) 2024-2026 OpenSpec Contributors.

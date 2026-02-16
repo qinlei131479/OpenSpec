@@ -137,6 +137,26 @@ mvn spring-boot:run
 
 </details>
 
+## Open Source vs Enterprise
+
+| Feature | Open Source | Enterprise |
+|---------|:----------:|:----------:|
+| Intelligent Retrieval & Chapter Generation | ✅ | ✅ |
+| Human-AI Collaborative Editing | ✅ | ✅ |
+| PDF / Markdown Export | ✅ | ✅ |
+| AutoCAD Plugin (File Import) | ❌ | ✅ |
+| Training & Q&A Support | ❌ | ✅ |
+| Data Processing Consulting | ❌ | ✅ |
+
+### Contact Us
+
+For enterprise edition details or business cooperation, feel free to reach out:
+
+- Email: `dlutyaol@qq.com`
+- WeChat: Scan the QR code below
+
+  <img src="docs/wechat_qr.png" alt="WeChat" width="200" />
+
 ## License
 
 Copyright (c) 2024-2026 OpenSpec Contributors.
