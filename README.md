@@ -1,40 +1,71 @@
+<h1 align="center">OpenSpec</h1>
+
+<p align="center">
+  <strong>Enterprise-Grade AI Platform for Professional Long-Document Generation</strong>
+</p>
+
+<p align="center">
+  Turn your knowledge base into standards-compliant, publication-ready documents in minutes — not days.
+</p>
+
 <p align="center">
   <a href="./README.md">English</a> |
   <a href="./README_zh.md">中文</a>
 </p>
 
-<h3 align="center">Enterprise-Grade AI Professional Long-Document Generation Platform</h3>
-<p align="center">Powered by RAG + multi-agent workflows, delivering high-quality automated long-document generation for architecture design, automotive repair, healthcare, bidding & tendering, and more.</p>
+<p align="center">
+  <a href="https://github.com/zhuzhaoyun/OpenSpec/releases/latest"><img src="https://img.shields.io/github/v/release/zhuzhaoyun/OpenSpec" alt="Latest Release"></a>
+  <a href="https://github.com/zhuzhaoyun/OpenSpec/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zhuzhaoyun/OpenSpec?color=blue" alt="License"></a>
+  <a href="https://github.com/zhuzhaoyun/OpenSpec"><img src="https://img.shields.io/github/stars/zhuzhaoyun/OpenSpec?style=social" alt="GitHub Stars"></a>
+  <a href="https://github.com/zhuzhaoyun/OpenSpec/fork"><img src="https://img.shields.io/github/forks/zhuzhaoyun/OpenSpec?style=social" alt="GitHub Forks"></a>
+  <a href="https://github.com/zhuzhaoyun/OpenSpec/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
+</p>
 
 <p align="center">
-  <a href="https://github.com/zhuzhaoyun/OpenSpec/releases/latest"><img src="https://img.shields.io/github/v/release/zhuzhaoyun/OpenSpec" alt="Latest release"></a>
-  <a href="https://github.com/zhuzhaoyun/OpenSpec"><img src="https://img.shields.io/github/stars/zhuzhaoyun/OpenSpec?color=%23F4A460" alt="GitHub Stars"></a>
-  <a href="https://github.com/zhuzhaoyun/OpenSpec"><img src="https://img.shields.io/github/forks/zhuzhaoyun/OpenSpec?color=%2388CCFF" alt="GitHub Forks"></a>
+  <a href="https://archspec.aizzyun.com/">Live Demo</a> &bull;
+  <a href="https://www.bilibili.com/video/BV1DoFUzBEmW/">Video Introduction</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#contact-us">Contact Us</a>
 </p>
 
 ---
 
-## What is OpenSpec?
+## Why OpenSpec?
 
-OpenSpec is an **enterprise-grade intelligent platform for professional long-document generation**.
+Generic AI (ChatGPT, Claude, Qwen, etc.) falls short on professional long documents:
 
-In specialized fields such as architecture design, automotive repair, healthcare, and bidding & tendering, professionals need to produce large volumes of structurally complex, technically rigorous, and standards-compliant long documents. These documents typically share the following characteristics:
+| Problem | Generic AI | OpenSpec |
+|---------|:----------:|:--------:|
+| Documents over 50 pages | Context lost, inconsistencies | Chapter-by-chapter generation, fully coherent |
+| Industry standards & regulations | Hallucination, makes things up | RAG retrieval from your own knowledge base |
+| Document formatting & templates | Cannot control layout | PDF / Markdown / AutoCAD export |
+| Quality assurance | Single-pass, no review | Multi-agent (Researcher + Auditor) workflow |
 
-- **Lengthy** — Often tens or even hundreds of pages, with multiple chapters and sub-chapters;
-- **Highly specialized** — Content must reference industry standards and regulatory provisions, with no room for fabrication;
-- **Strictly formatted** — Must follow specific document templates and layout standards;
-- **Repetitive** — Documents of the same type share similar structures, but details vary by project.
+**OpenSpec is not another AI writing tool.** It is a document engineering platform built for professionals who need accuracy, compliance, and scale.
 
-OpenSpec was built to solve this pain point. Users simply input basic project information, and the system will:
+## How It Works
 
-1. **Intelligent Retrieval** — Retrieve relevant standards, historical cases, and reference materials from the knowledge base;
-2. **Chapter-by-Chapter Generation** — A multi-agent workflow (Researcher + Auditor) generates standards-compliant professional content chapter by chapter;
-3. **Human-AI Collaboration** — Supports chapter-level review, rewriting, and supplementation for efficient human-AI collaboration;
-4. **One-Click Export** — Generate PDF, Markdown, AutoCAD title blocks, and other professional formats.
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
+│  User Input  │────▶│  RAG Retrieval   │────▶│  Multi-Agent    │────▶│  Human-AI    │
+│  (Project    │     │  (Standards,     │     │  Generation     │     │  Collaborative│
+│   Info)      │     │   Cases, Docs)   │     │  (Researcher +  │     │  Editing     │
+└─────────────┘     └──────────────────┘     │   Auditor)      │     └──────┬───────┘
+                                              └─────────────────┘            │
+                                                                             ▼
+                                                                    ┌──────────────┐
+                                                                    │  One-Click    │
+                                                                    │  Export       │
+                                                                    │  (PDF/MD/CAD) │
+                                                                    └──────────────┘
+```
 
-**OpenSpec 2-Minute Video Introduction (Architecture Design Scenario):** https://www.bilibili.com/video/BV1DoFUzBEmW/?share_source=copy_web&vd_source=d91cce476d06006159a799f4db6b9171
+1. **Intelligent Retrieval (RAG)** — Retrieves relevant standards, historical cases, and reference materials from your knowledge base
+2. **Multi-Agent Generation** — Researcher writes, Auditor reviews — chapter by chapter, like a real team
+3. **Human-AI Collaboration** — Review, rewrite, and refine at the chapter level
+4. **One-Click Export** — PDF, Markdown, AutoCAD title blocks, and more
 
-### Use Cases
+## Use Cases
 
 | Domain | Typical Documents |
 |--------|-------------------|
@@ -42,7 +73,7 @@ OpenSpec was built to solve this pain point. Users simply input basic project in
 | Automotive Repair | Repair technical manuals, fault diagnosis reports |
 | Healthcare | Clinical trial reports, diagnosis & treatment standard documents |
 | Bidding & Tendering | Technical proposals, tender document preparation |
-| More | Any structured long document that needs to be generated from a knowledge base |
+| **Any Industry** | **Any structured long document generated from a knowledge base** |
 
 ## UI Showcase
 
@@ -57,12 +88,26 @@ OpenSpec was built to solve this pain point. Users simply input basic project in
   </tr>
 </table>
 
-## Online Demo
+> **Video Demo (Architecture Design Scenario):** [Watch on Bilibili](https://www.bilibili.com/video/BV1DoFUzBEmW/?share_source=copy_web&vd_source=d91cce476d06006159a799f4db6b9171)
 
-Try OpenSpec online: [https://archspec.aizzyun.com/](https://archspec.aizzyun.com/)
+## Live Demo
+
+Try OpenSpec online: **[https://archspec.aizzyun.com/](https://archspec.aizzyun.com/)**
 
 - Email: `test@qq.com`
 - Password: `test`
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vue 3, TypeScript, Vite |
+| Backend | Spring Boot 3, Java 17 |
+| AI Agent | Python, LangGraph, LangChain |
+| Knowledge Retrieval | RAGFlow |
+| Observability | Langfuse (LLM tracing & cost analytics) |
+| Database | PostgreSQL |
+| Deployment | Docker, Docker Compose |
 
 ## Quick Start
 
@@ -148,7 +193,25 @@ mvn spring-boot:run
 | Training & Q&A Support | ❌ | ✅ |
 | Data Processing Consulting | ❌ | ✅ |
 
-### Contact Us
+## Contributing
+
+We welcome contributions! Feel free to:
+
+- Star this project to show your support
+- Submit [Issues](https://github.com/zhuzhaoyun/OpenSpec/issues) for bug reports and feature requests
+- Open [Pull Requests](https://github.com/zhuzhaoyun/OpenSpec/pulls) for improvements
+
+## Star History
+
+<a href="https://star-history.com/#zhuzhaoyun/OpenSpec&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zhuzhaoyun/OpenSpec&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zhuzhaoyun/OpenSpec&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=zhuzhaoyun/OpenSpec&type=Date" />
+ </picture>
+</a>
+
+## Contact Us
 
 For enterprise edition details or business cooperation, feel free to reach out:
 
