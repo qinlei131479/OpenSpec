@@ -39,31 +39,42 @@ Generic AI (ChatGPT, Claude, Qwen, etc.) falls short on professional long docume
 | Documents over 50 pages | Context lost, inconsistencies | Chapter-by-chapter generation, fully coherent |
 | Industry standards & regulations | Hallucination, makes things up | RAG retrieval from your own knowledge base |
 | Document formatting & templates | Cannot control layout | PDF / Markdown / AutoCAD export |
-| Quality assurance | Single-pass, no review | Multi-agent (Researcher + Auditor) workflow |
+| Quality assurance | Single-pass, no review | Three-agent workflow (Researcher + Generator + Auditor) |
 
 **OpenSpec is not another AI writing tool.** It is a document engineering platform built for professionals who need accuracy, compliance, and scale.
 
 ## How It Works
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
-│  User Input  │────▶│  RAG Retrieval   │────▶│  Multi-Agent    │────▶│  Human-AI    │
-│  (Project    │     │  (Standards,     │     │  Generation     │     │  Collaborative│
-│   Info)      │     │   Cases, Docs)   │     │  (Researcher +  │     │  Editing     │
-└─────────────┘     └──────────────────┘     │   Auditor)      │     └──────┬───────┘
-                                              └─────────────────┘            │
-                                                                             ▼
-                                                                    ┌──────────────┐
-                                                                    │  One-Click    │
-                                                                    │  Export       │
-                                                                    │  (PDF/MD/CAD) │
-                                                                    └──────────────┘
+                          ┌───────────────────────────────────────┐
+                          │          Knowledge Base (RAG)         │
+                          │   (Standards, Cases, Project Docs)    │
+                          └──┬──────────────┬──────────────┬─────┘
+                             │              │              │
+                          query on       query on       query on
+                          demand         demand         demand
+                             │              │              │
+┌──────────┐     ┌──────────▼──┐     ┌─────▼──────┐     ┌▼───────────┐     ┌──────────┐
+│  User    │────▶│  Researcher │────▶│  Generator │────▶│  Auditor   │────▶│  Human-AI│
+│  Input   │     │  (Research  │     │  (Write    │     │  (Review & │     │  Editing │
+│          │     │   & Gather) │     │   Content) │     │   Verify)  │     │          │
+└──────────┘     └─────────────┘     └────────────┘     └──────┬─────┘     └────┬─────┘
+                                           ▲                   │                │
+                                           └───── revise ──────┘                ▼
+                                                                        ┌──────────────┐
+                                                                        │  One-Click    │
+                                                                        │  Export       │
+                                                                        │  (PDF/MD/CAD) │
+                                                                        └──────────────┘
 ```
 
-1. **Intelligent Retrieval (RAG)** — Retrieves relevant standards, historical cases, and reference materials from your knowledge base
-2. **Multi-Agent Generation** — Researcher writes, Auditor reviews — chapter by chapter, like a real team
-3. **Human-AI Collaboration** — Review, rewrite, and refine at the chapter level
-4. **One-Click Export** — PDF, Markdown, AutoCAD title blocks, and more
+The system is powered by a **three-agent workflow**, where each agent can autonomously query the knowledge base when it needs more context:
+
+1. **Researcher Agent** — Gathers relevant standards, historical cases, and reference materials from the knowledge base to build a solid research foundation
+2. **Generator Agent** — Produces standards-compliant professional content chapter by chapter, based on the research context
+3. **Auditor Agent** — Reviews the generated content for compliance, consistency, and accuracy; queries the knowledge base for cross-validation and sends revisions back to the Generator if needed
+4. **Human-AI Collaboration** — Review, rewrite, and refine at the chapter level
+5. **One-Click Export** — PDF, Markdown, AutoCAD title blocks, and more
 
 ## Use Cases
 
