@@ -189,6 +189,8 @@ const matchTemplate = async () => {
     console.log('[模板匹配] 调用 API, 参数:', {
       userId: String(user.id),
       chapterTitle: props.currentChapter.title,
+      professionTagId: props.projectInfo?.professionTagId,
+      businessTypeTagId: props.projectInfo?.businessTypeTagId,
       threshold: 0.5,
       limit: 3
     });
@@ -197,6 +199,8 @@ const matchTemplate = async () => {
     const result = await searchTemplateChapter({
       userId: String(user.id),
       chapterTitle: props.currentChapter.title,
+      professionTagId: props.projectInfo?.professionTagId,
+      businessTypeTagId: props.projectInfo?.businessTypeTagId,
       threshold: 0.5,
       limit: 3
     });
@@ -297,6 +301,8 @@ const handleTemplateChange = async (val) => {
       const result = await searchTemplateChapter({
         userId: String(user.id),
         chapterTitle: props.currentChapter.title,
+        professionTagId: props.projectInfo?.professionTagId,
+        businessTypeTagId: props.projectInfo?.businessTypeTagId,
         threshold: 0.3,
         limit: 1
       });
@@ -514,7 +520,9 @@ const handleGenerate = async () => {
         template: chapterTemplateText.value,
         project_info: projectInfoText.value,
         user_id: userId,
-        enable_audit: enableAudit.value  // 传递校验开关状态
+        enable_audit: enableAudit.value,  // 传递校验开关状态
+        profession_tag_id: props.projectInfo?.professionTagId,      // 标签：专业
+        business_type_tag_id: props.projectInfo?.businessTypeTagId,  // 标签：业态
       },
       (event) => {
         // 复用现有的事件处理逻辑

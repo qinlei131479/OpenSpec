@@ -29,9 +29,10 @@ class TemplateMatcherService:
         self,
         user_id: str,
         chapter_title: str,
-        tag_ids: Optional[List[int]] = None,
+        profession_tag_id: Optional[int] = None,
+        business_type_tag_id: Optional[int] = None,
         threshold: float = 0.5,
-        limit: int = 5
+        limit: int = 10
     ) -> Dict[str, Any]:
         """
         基于 Metadata 权限过滤的模板章节检索
@@ -39,7 +40,8 @@ class TemplateMatcherService:
         Args:
             user_id: 用户ID
             chapter_title: 章节标题
-            tag_ids: 可选的标签过滤
+            profession_tag_id: 专业标签ID（单选）
+            business_type_tag_id: 业态标签ID（单选）
             threshold: 相似度阈值
             limit: 返回结果数量
 
@@ -59,7 +61,7 @@ class TemplateMatcherService:
                 return {'matched': None, 'alternatives': []}
 
             # 2. 构建权限过滤条件
-            metadata_condition = self._build_permission_filter(user_id, tag_ids)
+            metadata_condition = self._build_permission_filter(user_id)
 
             # 3. 向量检索
             try:
@@ -125,7 +127,32 @@ class TemplateMatcherService:
                     similarity
                 )
 
-            # 7. 合并每个文档的 chunk 内容
+            # 7. 标签后过滤：按 profession / business_type 字段独立匹配
+            if (profession_tag_id or business_type_tag_id) and doc_chunks_map:
+                filtered_map = {}
+                for doc_id, doc_data in doc_chunks_map.items():
+                    meta = doc_data['meta']
+                    match = True
+                    if profession_tag_id:
+                        doc_profession = str(meta.get('profession', '')).strip()
+                        if doc_profession and doc_profession != str(profession_tag_id):
+                            match = False
+                    if business_type_tag_id:
+                        doc_biz = str(meta.get('business_type', '')).strip()
+                        if doc_biz and doc_biz != str(business_type_tag_id):
+                            match = False
+                    if match:
+                        filtered_map[doc_id] = doc_data
+                # 仅当过滤后仍有结果时才替换，否则回退到全量结果
+                if filtered_map:
+                    logger.info(f"[标签过滤] profession={profession_tag_id}, business_type={business_type_tag_id}, "
+                               f"过滤前 {len(doc_chunks_map)} 个文档, 过滤后 {len(filtered_map)} 个文档")
+                    doc_chunks_map = filtered_map
+                else:
+                    logger.info(f"[标签过滤] profession={profession_tag_id}, business_type={business_type_tag_id}, "
+                               f"无匹配文档, 回退到全量结果 ({len(doc_chunks_map)} 个文档)")
+
+            # 8. 合并每个文档的 chunk 内容
             def build_merged_result(_doc_id, doc_data):
                 """合并同一文档的多个 chunk，提取目标章节内容"""
                 doc_meta = doc_data['meta']
@@ -211,8 +238,7 @@ class TemplateMatcherService:
 
     def _build_permission_filter(
         self,
-        user_id: str,
-        tag_ids: Optional[List[int]] = None
+        user_id: str
     ) -> dict:
         """
         构建基于 meta_fields 的权限过滤条件
@@ -220,6 +246,8 @@ class TemplateMatcherService:
         过滤逻辑:
         - 系统标准模板 (isStandard="true") 对所有人可见
         - 个人私有模板 (isStandard="false") 仅对所有者可见
+
+        标签过滤在检索后通过 step 7 进行字段级后过滤（profession / business_type）。
 
         RAGFlow metadata_condition 格式:
         {
@@ -243,7 +271,7 @@ class TemplateMatcherService:
             ]
         }
 
-        # 注意: 标签过滤在后处理中计算，不在 metadata_condition 中
+        # 注意: 标签过滤通过后处理实现（见 search() 中的"标签后过滤"步骤）
         # 因为 tags 存储为逗号分隔字符串，RAGFlow 的 metadata_condition 不支持复杂的字符串匹配
 
         return permission_filter

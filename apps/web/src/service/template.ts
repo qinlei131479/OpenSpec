@@ -570,7 +570,8 @@ export interface TemplateMatchResult {
 export async function searchTemplateChapter(params: {
   userId: string
   chapterTitle: string
-  tagIds?: number[]
+  professionTagId?: number
+  businessTypeTagId?: number
   threshold?: number
   limit?: number
 }): Promise<ApiResponse<{

@@ -26,7 +26,9 @@ class TemplateSearchRequest(BaseModel):
     """模板章节检索请求体"""
     userId: str
     chapterTitle: str
-    tagIds: Optional[List[int]] = None
+    tagIds: Optional[List[int]] = None  # 兼容旧接口，逐步废弃
+    professionTagId: Optional[int] = None
+    businessTypeTagId: Optional[int] = None
     threshold: Optional[float] = 0.5
     limit: Optional[int] = 5
 
@@ -44,13 +46,15 @@ async def search_template_chapter(request: TemplateSearchRequest):
     try:
         logger.info(f"========== 模板检索请求开始 ==========")
         logger.info(f"请求参数: userId={request.userId}, chapterTitle={request.chapterTitle}, "
-                   f"tagIds={request.tagIds}, threshold={request.threshold}, limit={request.limit}")
+                   f"professionTagId={request.professionTagId}, businessTypeTagId={request.businessTypeTagId}, "
+                   f"threshold={request.threshold}, limit={request.limit}")
 
         matcher = TemplateMatcherService()
         result = matcher.search(
             user_id=request.userId,
             chapter_title=request.chapterTitle,
-            tag_ids=request.tagIds,
+            profession_tag_id=request.professionTagId,
+            business_type_tag_id=request.businessTypeTagId,
             threshold=request.threshold,
             limit=request.limit
         )

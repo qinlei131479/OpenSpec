@@ -20,7 +20,7 @@ from langgraph.prebuilt import ToolNode
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # 导入自定义工具和日志
-from service.tools.construction_tools import retrieve_case, retrieve_standard, set_kb_ids
+from service.tools.construction_tools import retrieve_case, retrieve_standard
 from service.utils.prompt_manager import PromptManager
 from service.utils.token_counter import get_token_counter, count_tokens, truncate_text, calculate_available_tokens
 from utils.logger import get_logger

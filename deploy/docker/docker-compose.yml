@@ -16,16 +16,20 @@ services:
     ports:
       - "${BACKEND_PORT}:8080"
     restart: unless-stopped
+    volumes:
+      - ${LICENSE_FILE:-./license.lic}:/app/license.lic:ro
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?currentSchema=public
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       APP_DATABASE_INIT_ENABLED: false  # 生产环境禁用自动初始化，手动执行
+      LICENSE_PATH: /app/license.lic
+      JWT_SECRET: ${JWT_SECRET:-archspec-default-jwt-secret-key-2024}
     networks:
       - archspec-net
 
-  # 3. AI Agent (Python)s
+  # 3. AI Agent (Python)
   agent:
     image: ${DOCKER_REGISTRY:-}archspec-agent:${TAG:-latest}
     container_name: archspec-agent
@@ -49,6 +53,7 @@ services:
       - MIN_CONTENT_THRESHOLD=${MIN_CONTENT_THRESHOLD}
       - MAX_RESEARCH_LOOPS=${MAX_RESEARCH_LOOPS}
       - MAX_AUDIT_LOOPS=${MAX_AUDIT_LOOPS}
+      - JWT_SECRET=${JWT_SECRET:-archspec-default-jwt-secret-key-2024}
     logging:
       driver: "json-file"
       options:

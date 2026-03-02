@@ -31,7 +31,9 @@ class SetMetaFieldsRequest(BaseModel):
     isStandard: Optional[str] = "false"
     templateId: Optional[str] = None
     templateName: Optional[str] = None
-    tags: Optional[str] = None  # 逗号分隔的标签ID列表
+    tags: Optional[str] = None  # 逗号分隔的标签ID列表（兼容旧数据，逐步废弃）
+    profession: Optional[str] = None       # 专业标签 ID（单选）
+    business_type: Optional[str] = None    # 业态标签 ID（单选）
     fileType: Optional[str] = None
 
 # 全局实例化 RagflowParser (单例)
@@ -219,6 +221,10 @@ async def set_meta_fields(request: SetMetaFieldsRequest):
             meta_fields["templateName"] = request.templateName
         if request.tags:
             meta_fields["tags"] = request.tags
+        if request.profession is not None:
+            meta_fields["profession"] = request.profession
+        if request.business_type is not None:
+            meta_fields["business_type"] = request.business_type
         if request.fileType:
             meta_fields["fileType"] = request.fileType
 

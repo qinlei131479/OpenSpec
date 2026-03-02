@@ -57,6 +57,7 @@ import { getChineseNumber,processRecognitionResult, resetProjectForm } from '../
 import { useLogout } from '../composables/useLogout'
 import { authStorage } from '../utils/auth'
 import { hasTemplateManagementLicense } from '../service/license'
+import { getAllTags, createTag, searchTemplateChapter, type TemplateTag } from '../service/template'
 
 const route = useRoute()
 const router = useRouter()
@@ -330,6 +331,82 @@ const toggleReferenceMaterials = () => {
 }
 
 const docMetaData = ref([...mockDocMetaData])
+
+// 标签缓存（用于将标签 ID 解析为名称显示）
+const allTagsCache = ref<TemplateTag[]>([])
+const loadAllTagsCache = async () => {
+  try {
+    const response = await getAllTags()
+    if (response.code === 200 && response.data) {
+      allTagsCache.value = response.data
+    }
+  } catch (error) {
+    console.error('加载标签缓存失败:', error)
+  }
+}
+
+// 当前文档的标签显示
+const activeDocTagLabels = computed(() => {
+  const labels: Array<{ name: string; type: string }> = []
+  const doc = documents.value.find(d => d.id === currentDocumentId.value)
+  const info = doc?.projectInfo || projectForm.value
+  const tags = allTagsCache.value
+
+  if (info.professionTagId) {
+    const tag = tags.find(t => t.id === info.professionTagId)
+    if (tag) labels.push({ name: tag.name, type: 'primary' })
+  }
+  if (info.businessTypeTagId) {
+    const tag = tags.find(t => t.id === info.businessTypeTagId)
+    if (tag) labels.push({ name: tag.name, type: 'warning' })
+  }
+  return labels
+})
+
+// 文档标签编辑 popover
+const showDocTagPopover = ref(false)
+const editProfessionTagId = ref<number | null>(null)
+const editBusinessTypeTagId = ref<number | null>(null)
+
+const cachedProfessionTags = computed(() =>
+  allTagsCache.value.filter(t => t.category === 'profession')
+)
+const cachedBusinessTypeTags = computed(() =>
+  allTagsCache.value.filter(t => t.category === 'business_type')
+)
+
+const openDocTagPopover = () => {
+  const doc = documents.value.find(d => d.id === currentDocumentId.value)
+  const info = doc?.projectInfo || projectForm.value
+  editProfessionTagId.value = info.professionTagId ?? null
+  editBusinessTypeTagId.value = info.businessTypeTagId ?? null
+  showDocTagPopover.value = true
+}
+
+const toggleEditTag = (tagId: number, category: 'profession' | 'business_type') => {
+  if (category === 'profession') {
+    editProfessionTagId.value = editProfessionTagId.value === tagId ? null : tagId
+  } else {
+    editBusinessTypeTagId.value = editBusinessTypeTagId.value === tagId ? null : tagId
+  }
+}
+
+const saveDocTags = () => {
+  const doc = documents.value.find(d => d.id === currentDocumentId.value)
+  if (doc) {
+    if (!doc.projectInfo) {
+      doc.projectInfo = {} as any
+    }
+    doc.projectInfo.professionTagId = editProfessionTagId.value ?? undefined
+    doc.projectInfo.businessTypeTagId = editBusinessTypeTagId.value ?? undefined
+  }
+  // 同步到 projectForm
+  projectForm.value.professionTagId = editProfessionTagId.value ?? undefined
+  projectForm.value.businessTypeTagId = editBusinessTypeTagId.value ?? undefined
+  // 持久化到 localStorage
+  saveProjectInfo()
+  showDocTagPopover.value = false
+}
 
 // 文档mock数据
 const totalDocObjects = ref([])
@@ -995,6 +1072,87 @@ const wizardSteps = ref([
 const outlineItems = ref([])
 const autoGenerateOnCreate = ref(true)
 
+// 标签选择相关数据
+const wizardAllTags = ref<TemplateTag[]>([])
+const wizardProfessionTagId = ref<number | null>(null)
+const wizardBusinessTypeTagId = ref<number | null>(null)
+
+const wizardProfessionTags = computed(() =>
+  wizardAllTags.value.filter(tag => tag.category === 'profession')
+)
+const wizardBusinessTypeTags = computed(() =>
+  wizardAllTags.value.filter(tag => tag.category === 'business_type')
+)
+
+const toggleWizardTag = (tagId: number, category: 'profession' | 'business_type') => {
+  if (category === 'profession') {
+    wizardProfessionTagId.value = wizardProfessionTagId.value === tagId ? null : tagId
+  } else {
+    wizardBusinessTypeTagId.value = wizardBusinessTypeTagId.value === tagId ? null : tagId
+  }
+}
+
+// 自定义标签
+const customTagInput = ref('')
+const showCustomTagInput = ref(false)
+const customTagCategory = ref<'profession' | 'business_type'>('profession')
+
+const addCustomTag = async () => {
+  const name = customTagInput.value.trim()
+  if (!name) return
+  // 避免重复
+  if (wizardAllTags.value.some(t => t.name === name)) {
+    customTagInput.value = ''
+    showCustomTagInput.value = false
+    // 如果已存在，直接选中
+    const existing = wizardAllTags.value.find(t => t.name === name)
+    if (existing) {
+      if (existing.category === 'profession') {
+        wizardProfessionTagId.value = existing.id
+      } else if (existing.category === 'business_type') {
+        wizardBusinessTypeTagId.value = existing.id
+      }
+    }
+    return
+  }
+  try {
+    const response = await createTag({ name, category: customTagCategory.value })
+    if (response.code === 200 && response.data) {
+      wizardAllTags.value.push(response.data)
+      if (customTagCategory.value === 'profession') {
+        wizardProfessionTagId.value = response.data.id
+      } else {
+        wizardBusinessTypeTagId.value = response.data.id
+      }
+    }
+  } catch (error) {
+    console.error('创建标签失败:', error)
+  }
+  customTagInput.value = ''
+  showCustomTagInput.value = false
+}
+
+const cancelCustomTag = () => {
+  customTagInput.value = ''
+  showCustomTagInput.value = false
+}
+
+const startAddCustomTag = (category: 'profession' | 'business_type') => {
+  customTagCategory.value = category
+  showCustomTagInput.value = true
+}
+
+const loadWizardTags = async () => {
+  try {
+    const response = await getAllTags()
+    if (response.code === 200 && response.data) {
+      wizardAllTags.value = response.data
+    }
+  } catch (error) {
+    console.error('加载标签失败:', error)
+  }
+}
+
 // 向导相关方法
 const startDocumentWizard = () => {
   showDocumentWizard.value = true
@@ -1004,6 +1162,12 @@ const startDocumentWizard = () => {
   clearWizardProjectInfo()
   wizardForm.value = resetProjectForm()
   uploadStatus.value = 'idle'
+  // 重置标签选择并加载标签列表
+  wizardProfessionTagId.value = null
+  wizardBusinessTypeTagId.value = null
+  showCustomTagInput.value = false
+  customTagInput.value = ''
+  loadWizardTags()
 }
 // 向导内专用：清除项目信息（不影响现有文档）
 const clearWizardProjectInfo = () => {
@@ -1375,8 +1539,30 @@ const generateDocumentDefault = async(forTest:boolean=false) => {
       }
 
       try {
-        const promptParams: any = (promptParamsByTitle as any)[titleStr] || {} 
+        const promptParams: any = (promptParamsByTitle as any)[titleStr] || {}
         const usePromptParams = !!(promptParams && (promptParams.structure || promptParams.feature || promptParams.requirement))
+
+        const activeDoc = documents.value.find(d => d.id === currentDocumentId.value)
+
+        // --- 批量模式下的模板匹配 ---
+        let matchedTemplate = ''
+        try {
+          const matchResult = await searchTemplateChapter({
+            userId: String(userInfo.value?.id || ''),
+            chapterTitle: titleStr,
+            professionTagId: activeDoc?.projectInfo?.professionTagId,
+            businessTypeTagId: activeDoc?.projectInfo?.businessTypeTagId,
+            threshold: 0.5,
+            limit: 1
+          })
+
+          if (matchResult.code === 200 && matchResult.data?.matched) {
+            matchedTemplate = matchResult.data.matched.chunkContent || ''
+            console.log(`[批量生成] 章节"${titleStr}" 匹配到模板: ${matchResult.data.matched.templateName}, 内容长度: ${matchedTemplate.length}`)
+          }
+        } catch (matchError) {
+          console.warn(`[批量生成] 章节"${titleStr}" 模板匹配失败:`, matchError)
+        }
 
         const params = {
           query,
@@ -1386,10 +1572,12 @@ const generateDocumentDefault = async(forTest:boolean=false) => {
           feature: '',
           chapterName,
           addition: '',
-          template: '',
+          template: matchedTemplate,
           usePromptParams,
           document_id: currentDocumentId.value,  // 传递 document_id 用于 Langfuse session 关联
           user_id: userId.value,                 // 传递 user_id
+          professionTagId: activeDoc?.projectInfo?.professionTagId,     // 标签：专业
+          businessTypeTagId: activeDoc?.projectInfo?.businessTypeTagId, // 标签：业态
         }
 
         if (usePromptParams) {
@@ -1467,7 +1655,7 @@ const updateDocumentList = (docId:string, docName:string) => {
     lastModified: new Date().toLocaleString('zh-CN'),
     status: 'draft',
     isActive: true, // 新创建的文档应该被选中
-    projectInfo: { ...wizardForm.value },
+    projectInfo: { ...wizardForm.value, professionTagId: wizardProfessionTagId.value ?? undefined, businessTypeTagId: wizardBusinessTypeTagId.value ?? undefined },
     outline: [...outlineItems.value]   // 保存大纲到文档对象中
   }
 
@@ -1519,7 +1707,7 @@ const saveProjectData = (docName:string) => {
   //保存项目数据到localStorage，包含大纲信息
   const projectData = {
     title: docName,
-    projectInfo: { ...wizardForm.value },
+    projectInfo: { ...wizardForm.value, professionTagId: wizardProfessionTagId.value ?? undefined, businessTypeTagId: wizardBusinessTypeTagId.value ?? undefined },
     outline: [...outlineItems.value] // 保存修改后的大纲
   }
   localStorage.setItem('currentProject', JSON.stringify(projectData))
@@ -1541,7 +1729,7 @@ const execCreateDocument = async (docName:string) => {
     const result = await createDocument({
       name: docName,
       userId: userId.value,
-      projectInfo: { ...wizardForm.value }
+      projectInfo: { ...wizardForm.value, professionTagId: wizardProfessionTagId.value ?? undefined, businessTypeTagId: wizardBusinessTypeTagId.value ?? undefined }
     })
     if (result.code === 201 || result.code === 200) {
       docId = result.data?.id || ''
@@ -1790,6 +1978,9 @@ const loadDocumentList = async () => {
 
 // 生命周期
 onMounted(async () => {
+  // 加载标签缓存（用于显示文档标签名称）
+  loadAllTagsCache()
+
   // 加载文档列表
   await loadDocumentList()
   
@@ -2049,13 +2240,51 @@ watch(projectForm, (newValue, oldValue) => {
                   <el-tag size="small" type="info">{{ projectSummary }}</el-tag>
                 </div>
                 <div class="document-meta">
-                  <el-tag v-for="meta in docMetaData" :key="meta.name" :type="meta.type">{{ meta.name }}</el-tag>
-                  <!-- <el-button 
-                    size="small" 
-                    type="default" 
-                    class="doc-op-btn meta-view-btn" 
-                    @click="openReviewDrawer"
-                  >...</el-button> -->
+                  <el-tag v-for="tag in activeDocTagLabels" :key="tag.name" :type="tag.type" size="small">{{ tag.name }}</el-tag>
+                  <el-popover
+                    :visible="showDocTagPopover"
+                    placement="bottom-start"
+                    :width="320"
+                    @update:visible="(val: boolean) => { if (!val) showDocTagPopover = false }"
+                  >
+                    <template #reference>
+                      <span v-if="activeDocTagLabels.length > 0" class="doc-tag-edit-btn" @click="openDocTagPopover">编辑</span>
+                      <el-button v-else size="small" text class="doc-tag-add-btn" @click="openDocTagPopover">
+                        <el-icon><Plus /></el-icon>
+                        <span>添加标签</span>
+                      </el-button>
+                    </template>
+                    <div class="doc-tag-popover">
+                      <div class="doc-tag-group">
+                        <div class="doc-tag-group-label">专业分类</div>
+                        <div class="doc-tag-grid">
+                          <el-tag
+                            v-for="tag in cachedProfessionTags" :key="tag.id"
+                            :type="editProfessionTagId === tag.id ? 'primary' : 'info'"
+                            :effect="editProfessionTagId === tag.id ? 'dark' : 'plain'"
+                            size="small" class="doc-tag-selectable"
+                            @click="toggleEditTag(tag.id, 'profession')"
+                          >{{ tag.name }}</el-tag>
+                        </div>
+                      </div>
+                      <div class="doc-tag-group">
+                        <div class="doc-tag-group-label">业态分类</div>
+                        <div class="doc-tag-grid">
+                          <el-tag
+                            v-for="tag in cachedBusinessTypeTags" :key="tag.id"
+                            :type="editBusinessTypeTagId === tag.id ? 'primary' : 'info'"
+                            :effect="editBusinessTypeTagId === tag.id ? 'dark' : 'plain'"
+                            size="small" class="doc-tag-selectable"
+                            @click="toggleEditTag(tag.id, 'business_type')"
+                          >{{ tag.name }}</el-tag>
+                        </div>
+                      </div>
+                      <div class="doc-tag-popover-footer">
+                        <el-button size="small" @click="showDocTagPopover = false">取消</el-button>
+                        <el-button size="small" type="primary" @click="saveDocTags">保存</el-button>
+                      </div>
+                    </div>
+                  </el-popover>
                 </div>
               </div>
               <div class="document-operations">
@@ -2182,42 +2411,47 @@ watch(projectForm, (newValue, oldValue) => {
     </div>
 
     <!-- 文档创建向导 -->
-    <el-dialog 
-      v-model="showDocumentWizard" 
-      title="新建文档" 
+    <el-dialog
+      v-model="showDocumentWizard"
       width="800px"
       :close-on-click-modal="false"
       class="document-wizard-dialog"
+      :show-close="false"
       align-center
     >
-
-      <div class="wizard-progress">
-        <div class="progress-steps">
-          <div 
-            v-for="(step, index) in wizardSteps" 
-            :key="step.id"
-            class="step-item"
-            :class="{ 
-              'active': wizardStep === step.id, 
-              'completed': step.completed 
-            }"
-          >
-            <div class="step-icon">
-              <el-icon v-if="step.completed">
-                <CircleCheck />
+      <template #header>
+        <div class="wizard-header-bar">
+          <span class="wizard-header-title">新建文档</span>
+          <div class="wizard-header-steps">
+            <div
+              v-for="(step, index) in wizardSteps"
+              :key="step.id"
+              class="step-item"
+              :class="{
+                'active': wizardStep === step.id,
+                'completed': step.completed
+              }"
+            >
+              <div class="step-icon">
+                <el-icon v-if="step.completed">
+                  <CircleCheck />
+                </el-icon>
+                <el-icon v-else-if="wizardStep === step.id">
+                  <Check />
+                </el-icon>
+                <span v-else class="step-number">{{ step.id }}</span>
+              </div>
+              <div class="step-label">{{ step.title }}</div>
+              <el-icon v-if="index < wizardSteps.length - 1" class="step-arrow">
+                <ArrowRight />
               </el-icon>
-              <el-icon v-else-if="wizardStep === step.id">
-                <Check />
-              </el-icon>
-              <span v-else class="step-number">{{ step.id }}</span>
             </div>
-            <div class="step-title">{{ step.title }}</div>
-            <el-icon v-if="index < wizardSteps.length - 1" class="step-arrow">
-              <ArrowRight />
-            </el-icon>
           </div>
+          <button class="wizard-close-btn" @click="showDocumentWizard = false">
+            <el-icon><Close /></el-icon>
+          </button>
         </div>
-      </div>
+      </template>
 
       <!-- 步骤内容 -->
       <div class="wizard-content">
@@ -2265,7 +2499,7 @@ watch(projectForm, (newValue, oldValue) => {
                   <el-input 
                     v-model="wizardForm.projectDescription" 
                     type="textarea"
-                    :rows="12"
+                    :rows="10"
                     placeholder="请输入项目概况或上传项目相关文件（如设计说明、规划条件等）。点击识别后，系统能够识别各项关键信息（详见识别结果），以帮助您生成更准确的结果。
 
 样例：本项目为“XX高中教学楼、宿舍楼”，位于XX市XX区，用地性质为教育用地；总建筑面积约10,000㎡，建筑高度50m，地上5层（地下1层）；结构体系为框架-剪力墙；抗震设防烈度7度；气候分区为夏热冬冷地区。"
@@ -2338,6 +2572,98 @@ watch(projectForm, (newValue, oldValue) => {
               </el-card>
             </div>
           </el-form>
+
+          <!-- 标签选择 -->
+          <div class="form-section tag-selection-section" v-if="wizardAllTags.length > 0">
+            <div class="tag-section-header">
+              <span class="tag-section-title">标签选择</span>
+              <el-tooltip content="选择标签可提升模板匹配精度" placement="top">
+                <el-icon class="upload-tip-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </div>
+            <div class="wizard-tag-groups">
+              <!-- 专业分类 -->
+              <div class="wizard-tag-group" v-if="wizardProfessionTags.length > 0">
+                <div class="wizard-tag-group-label">专业分类</div>
+                <div class="wizard-tag-grid">
+                  <div
+                    v-for="tag in wizardProfessionTags"
+                    :key="tag.id"
+                    class="wizard-chip"
+                    :class="{ selected: wizardProfessionTagId === tag.id }"
+                    @click="toggleWizardTag(tag.id, 'profession')"
+                  >
+                    <span class="chip-text">{{ tag.name }}</span>
+                    <el-icon v-if="wizardProfessionTagId === tag.id" class="chip-check"><Check /></el-icon>
+                  </div>
+                  <!-- 添加自定义标签按钮 -->
+                  <div
+                    v-if="!showCustomTagInput || customTagCategory !== 'profession'"
+                    class="wizard-chip add-chip"
+                    @click="startAddCustomTag('profession')"
+                  >
+                    <el-icon><Plus /></el-icon>
+                    <span class="chip-text">自定义</span>
+                  </div>
+                  <!-- 内联输入 -->
+                  <div v-if="showCustomTagInput && customTagCategory === 'profession'" class="custom-tag-inline">
+                    <el-input
+                      v-model="customTagInput"
+                      size="small"
+                      placeholder="输入标签名"
+                      maxlength="10"
+                      autofocus
+                      class="custom-tag-input"
+                      @keydown.enter="addCustomTag"
+                      @keydown.escape="cancelCustomTag"
+                    />
+                    <el-button size="small" type="primary" :disabled="!customTagInput.trim()" @click="addCustomTag">添加</el-button>
+                    <el-button size="small" @click="cancelCustomTag">取消</el-button>
+                  </div>
+                </div>
+              </div>
+              <!-- 业态分类 -->
+              <div class="wizard-tag-group" v-if="wizardBusinessTypeTags.length > 0">
+                <div class="wizard-tag-group-label">业态分类</div>
+                <div class="wizard-tag-grid">
+                  <div
+                    v-for="tag in wizardBusinessTypeTags"
+                    :key="tag.id"
+                    class="wizard-chip"
+                    :class="{ selected: wizardBusinessTypeTagId === tag.id }"
+                    @click="toggleWizardTag(tag.id, 'business_type')"
+                  >
+                    <span class="chip-text">{{ tag.name }}</span>
+                    <el-icon v-if="wizardBusinessTypeTagId === tag.id" class="chip-check"><Check /></el-icon>
+                  </div>
+                  <!-- 添加自定义标签按钮 -->
+                  <div
+                    v-if="!showCustomTagInput || customTagCategory !== 'business_type'"
+                    class="wizard-chip add-chip"
+                    @click="startAddCustomTag('business_type')"
+                  >
+                    <el-icon><Plus /></el-icon>
+                    <span class="chip-text">自定义</span>
+                  </div>
+                  <!-- 内联输入 -->
+                  <div v-if="showCustomTagInput && customTagCategory === 'business_type'" class="custom-tag-inline">
+                    <el-input
+                      v-model="customTagInput"
+                      size="small"
+                      placeholder="输入标签名"
+                      maxlength="10"
+                      autofocus
+                      class="custom-tag-input"
+                      @keydown.enter="addCustomTag"
+                      @keydown.escape="cancelCustomTag"
+                    />
+                    <el-button size="small" type="primary" :disabled="!customTagInput.trim()" @click="addCustomTag">添加</el-button>
+                    <el-button size="small" @click="cancelCustomTag">取消</el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 步骤2: 大纲 -->
@@ -2424,13 +2750,13 @@ watch(projectForm, (newValue, oldValue) => {
                   :key="subItem.id"
                   class="outline-item sub-outline-item"
                   draggable="true"
-                  @dragstart="handleSubDragStart($event, index, subIndex)"
+                @dragstart="handleSubDragStart($event, Number(index), Number(subIndex))"
                   @dragover="handleDragOver($event)"
-                  @drop="handleSubDrop($event, index, subIndex)"
+                @drop="handleSubDrop($event, Number(index), Number(subIndex))"
                 >
                   <div class="outline-item-content">
                     <div class="outline-left-actions">
-                      <div class="add-btn" @click="addSubOutlineItemAfter(index, subIndex)" title="添加子章节">
+                    <div class="add-btn" @click="addSubOutlineItemAfter(Number(index), Number(subIndex))" title="添加子章节">
                         <el-icon>
                           <Plus />
                         </el-icon>
@@ -2443,7 +2769,7 @@ watch(projectForm, (newValue, oldValue) => {
                         </div>
                       </div>
                     </div>
-                    <span class="outline-number">{{ index + 1 }}.{{ subIndex + 1 }}</span>
+                    <span class="outline-number">{{ Number(index) + 1 }}.{{ Number(subIndex) + 1 }}</span>
                     <div 
                       class="outline-title"
                       contenteditable="true"
@@ -2784,35 +3110,66 @@ watch(projectForm, (newValue, oldValue) => {
   min-width: 0;
 }
 
-.wizard-progress {
-  padding: 10px 24px;
-  border-bottom: 1px solid var(--gray-200);
+/* 向导头部：标题 + 步骤合一行 */
+.wizard-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0;
 }
 
-.progress-steps {
+.wizard-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gray-900);
+  white-space: nowrap;
+}
+
+.wizard-header-steps {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.wizard-close-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.wizard-close-btn:hover {
+  background: var(--gray-100);
+  color: var(--gray-800);
 }
 
 .step-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   position: relative;
 }
 
 .step-icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--gray-200);
   color: var(--gray-500);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2826,23 +3183,24 @@ watch(projectForm, (newValue, oldValue) => {
   color: white;
 }
 
-.step-title {
-  font-size: 14px;
+.step-label {
+  font-size: 13px;
   font-weight: 500;
-  color: var(--gray-700);
+  color: var(--gray-600);
 }
 
-.step-item.active .step-title {
+.step-item.active .step-label {
   color: var(--primary-color);
+  font-weight: 600;
 }
 
-.step-item.completed .step-title {
+.step-item.completed .step-label {
   color: var(--success-color);
 }
 
 .step-arrow {
-  color: var(--gray-400);
-  font-size: 16px;
+  color: var(--gray-300);
+  font-size: 14px;
 }
 
 .wizard-content {
@@ -3504,6 +3862,67 @@ watch(projectForm, (newValue, oldValue) => {
     border-color: #1d4ed8;
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.doc-tag-edit-btn {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  line-height: 24px;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.doc-tag-add-btn {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  padding: 2px 8px;
+  height: auto;
+  .el-icon {
+    font-size: 12px;
+    margin-right: 2px;
+  }
+  &:hover {
+    color: var(--el-color-primary);
+  }
+}
+
+.doc-tag-popover {
+  .doc-tag-group {
+    margin-bottom: 12px;
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  .doc-tag-group-label {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .doc-tag-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .doc-tag-selectable {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+  }
+  .doc-tag-popover-footer {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--el-border-color-lighter);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
   }
 }
 
@@ -4794,5 +5213,163 @@ watch(projectForm, (newValue, oldValue) => {
   color: var(--primary-color);
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* 标签选择区域 */
+.tag-selection-section {
+  margin-top: 16px;
+  background: var(--gray-50);
+  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200);
+  box-shadow: none;
+}
+
+.tag-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--gray-200);
+}
+
+.tag-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-800);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-section-hint {
+  font-size: 11px;
+  color: var(--gray-500);
+}
+
+.wizard-tag-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wizard-tag-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.wizard-tag-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-600);
+  margin-bottom: 0;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.wizard-tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+
+.wizard-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  background: #ffffff;
+  border: 1px solid var(--gray-200);
+  color: var(--gray-700);
+  box-shadow: none;
+}
+
+.wizard-chip:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.wizard-chip.selected {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: #2563eb;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.wizard-chip.selected:hover {
+  opacity: 0.96;
+  color: #ffffff;
+}
+
+.chip-check {
+  font-size: 12px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chip-text {
+  line-height: 1;
+  font-weight: 500;
+}
+
+.wizard-chip.add-chip {
+  border: 1px dashed var(--gray-300);
+  color: var(--gray-500);
+  background: transparent;
+  box-shadow: none;
+}
+
+.wizard-chip.add-chip:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.custom-tag-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px dashed var(--gray-200);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.custom-tag-input {
+  width: 110px;
+}
+
+.custom-tag-input :deep(.el-input__wrapper) {
+  border-radius: 6px;
+  box-shadow: none;
+  height: 24px;
+  padding: 0 6px;
+}
+
+.custom-tag-inline :deep(.el-button) {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
 }
 </style>

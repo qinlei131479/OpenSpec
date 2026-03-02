@@ -1,49 +1,22 @@
 /**
  * 用户相关 API 服务
+ * 调用自建 Java 后端 /api/v1/user/* 接口
  */
-import axios from 'axios';
-import type { AxiosResponse } from 'axios';
 import { getAuthorization, authStorage, redirectToLogin } from '@/utils/auth';
 
-// 配置 API 基础 URL
-// RAGFlow 后端地址
-const API_BASE_URL = import.meta.env.RAGFLOW_BASE_URL  || 'https://rag.aizzyun.com/v1';
+const API_PREFIX = import.meta.env.AI_APP || '';
+const API_BASE_URL = `${API_PREFIX}/api/v1`;
 
-// 创建 axios 实例
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
+function getAuthHeaders(): HeadersInit {
+  const headers: HeadersInit = {
     'Content-Type': 'application/json',
-  },
-});
-
-// 请求拦截器：自动添加 Authorization header
-apiClient.interceptors.request.use(
-  (config: any) => {
-    const authorization = getAuthorization();
-    if (authorization && !(config.headers as any).skipToken) {
-      config.headers.Authorization = authorization;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+  };
+  const authorization = getAuthorization();
+  if (authorization) {
+    headers['Authorization'] = authorization;
   }
-);
-
-// 响应拦截器：处理错误
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // 未授权，清除认证信息并跳转到登录页
-      authStorage.clearAll();
-      redirectToLogin();
-    }
-    return Promise.reject(error);
-  }
-);
+  return headers;
+}
 
 /**
  * API 响应格式
@@ -63,6 +36,15 @@ export interface LoginParams {
 }
 
 /**
+ * 注册请求参数
+ */
+export interface RegisterParams {
+  email: string;
+  password: string;
+  nickname?: string;
+}
+
+/**
  * 用户信息
  */
 export interface UserData {
@@ -71,42 +53,44 @@ export interface UserData {
   nickname: string;
   avatar?: string;
   access_token: string;
-  is_superuser?: boolean;
-  is_active?: string;
-  [key: string]: any;
 }
 
 /**
  * 登录接口
- * @param params 登录参数
- * @returns 包含响应数据和完整响应对象的 Promise
  */
-export async function login(
-  params: LoginParams
-): Promise<{ data: ApiResponse<UserData>; response: AxiosResponse }> {
-  const response = await apiClient.post<ApiResponse<UserData>>(
-    '/user/login',
-    params,
-    { headers: { skipToken: true } } as any // 登录接口不需要 token
-  );
-  return { data: response.data, response };
+export async function login(params: LoginParams): Promise<ApiResponse<UserData>> {
+  const response = await fetch(`${API_BASE_URL}/user/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return response.json();
 }
 
 /**
- * 登出接口
- * @returns API 响应
+ * 注册接口
  */
-export async function logout(): Promise<ApiResponse> {
-  const response = await apiClient.get<ApiResponse>('/user/logout');
-  return response.data;
+export async function register(params: RegisterParams): Promise<ApiResponse<UserData>> {
+  const response = await fetch(`${API_BASE_URL}/user/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  return response.json();
 }
 
 /**
  * 获取用户信息
- * @returns 用户信息
  */
 export async function getUserInfo(): Promise<ApiResponse<UserData>> {
-  const response = await apiClient.get<ApiResponse<UserData>>('/user/info');
-  return response.data;
+  const response = await fetch(`${API_BASE_URL}/user/info`, {
+    method: 'GET',
+    headers: getAuthHeaders(),
+  });
+  if (response.status === 401) {
+    authStorage.clearAll();
+    redirectToLogin();
+    throw new Error('未授权，请重新登录');
+  }
+  return response.json();
 }
-

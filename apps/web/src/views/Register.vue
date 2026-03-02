@@ -3,8 +3,8 @@
     <div class="login-container">
       <div class="login-form">
         <div class="login-header">
-          <h2>登录</h2>
-          <p class="subtitle">欢迎回来，请登录您的账户</p>
+          <h2>注册</h2>
+          <p class="subtitle">创建您的账户</p>
         </div>
 
         <form class="login-form-content" @submit.prevent="handleSubmit">
@@ -17,7 +17,18 @@
                 placeholder="请输入邮箱"
                 size="large"
                 clearable
-                @keyup.enter="handleSubmit"
+              />
+            </div>
+          </div>
+
+          <div class="form-item">
+            <label class="form-label">昵称</label>
+            <div class="form-control">
+              <el-input
+                v-model="formData.nickname"
+                placeholder="请输入昵称（选填）"
+                size="large"
+                clearable
               />
             </div>
           </div>
@@ -28,7 +39,21 @@
               <el-input
                 v-model="formData.password"
                 type="password"
-                placeholder="请输入密码"
+                placeholder="请输入密码（至少6位）"
+                size="large"
+                show-password
+                clearable
+              />
+            </div>
+          </div>
+
+          <div class="form-item">
+            <label class="form-label">确认密码</label>
+            <div class="form-control">
+              <el-input
+                v-model="formData.confirmPassword"
+                type="password"
+                placeholder="请再次输入密码"
                 size="large"
                 show-password
                 clearable
@@ -37,28 +62,24 @@
             </div>
           </div>
 
-          <div class="form-item form-inline">
-            <el-checkbox v-model="formData.remember">记住我</el-checkbox>
-          </div>
-
-          <div class="form-item" v-if="localError || loginError">
-            <el-alert :title="localError || loginError" type="error" :closable="false" show-icon />
+          <div class="form-item" v-if="errorMsg">
+            <el-alert :title="errorMsg" type="error" :closable="false" show-icon />
           </div>
 
           <div class="form-item">
             <el-button
               type="primary"
               size="large"
-              :loading="loginLoading"
+              :loading="loading"
               native-type="submit"
               class="submit-button"
             >
-              登录
+              注册
             </el-button>
           </div>
 
           <div class="form-item register-link">
-            还没有账户？<router-link to="/register">立即注册</router-link>
+            已有账户？<router-link to="/login">返回登录</router-link>
           </div>
         </form>
       </div>
@@ -69,52 +90,66 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
-import { useRouter, useRoute } from 'vue-router';
-import { useLogin } from '@/composables/useLogin';
+import { useRouter } from 'vue-router';
+import { register } from '@/service/user';
+import { authStorage } from '@/utils/auth';
+import type { UserInfo } from '@/utils/auth';
 
 const router = useRouter();
-const route = useRoute();
-const localError = ref('');
+const loading = ref(false);
+const errorMsg = ref('');
 
 const formData = reactive({
   email: '',
+  nickname: '',
   password: '',
-  remember: false,
+  confirmPassword: '',
 });
 
-const { loading: loginLoading, login, error: loginError } = useLogin();
-
-
 const handleSubmit = async () => {
-  localError.value = '';
+  errorMsg.value = '';
   const email = formData.email.trim();
-  const password = formData.password.trim();
+  const password = formData.password;
+  const confirmPassword = formData.confirmPassword;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  if (!email) {
-    localError.value = '请输入邮箱';
-    return;
-  }
-  if (!emailRegex.test(email)) {
-    localError.value = '请输入正确的邮箱格式';
-    return;
-  }
-  if (!password) {
-    localError.value = '请输入密码';
-    return;
-  }
+  if (!email) { errorMsg.value = '请输入邮箱'; return; }
+  if (!emailRegex.test(email)) { errorMsg.value = '请输入正确的邮箱格式'; return; }
+  if (!password) { errorMsg.value = '请输入密码'; return; }
+  if (password.length < 6) { errorMsg.value = '密码长度至少6位'; return; }
+  if (password !== confirmPassword) { errorMsg.value = '两次输入的密码不一致'; return; }
 
-  const code = await login({
-    email,
-    password,
-  });
+  loading.value = true;
+  try {
+    const response = await register({
+      email,
+      password,
+      nickname: formData.nickname.trim() || undefined,
+    });
 
-  if (code === 0) {
-    ElMessage.success('登录成功');
-    const redirect = route.query.redirect as string;
-    router.push(redirect || '/');
-  } else {
-    ElMessage.error(loginError.value || '登录失败');
+    if (response.code === 200 && response.data) {
+      const userData = response.data;
+      const userInfo: UserInfo = {
+        id: userData.id,
+        email: userData.email,
+        name: userData.nickname,
+        nickname: userData.nickname,
+        avatar: userData.avatar,
+      };
+      authStorage.setAuthData({
+        Authorization: `Bearer ${userData.access_token}`,
+        Token: userData.access_token,
+        userInfo,
+      });
+      ElMessage.success('注册成功');
+      router.push('/');
+    } else {
+      errorMsg.value = response.message || '注册失败';
+    }
+  } catch (err: any) {
+    errorMsg.value = err.message || '注册失败，请检查网络连接';
+  } finally {
+    loading.value = false;
   }
 };
 </script>
@@ -159,7 +194,7 @@ const handleSubmit = async () => {
         flex-direction: column;
         gap: 16px;
         padding: 5px 20px;
-        
+
         .form-item {
           display: flex;
           flex-direction: column;
@@ -201,4 +236,3 @@ const handleSubmit = async () => {
   }
 }
 </style>
-

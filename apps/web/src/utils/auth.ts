@@ -130,3 +130,22 @@ export function redirectToLogin(): void {
   window.location.href = `${window.location.origin}${loginPath}`;
 }
 
+/**
+ * 带 JWT 认证的 fetch 封装
+ * 自动注入 Authorization header，401 时跳转登录页
+ */
+export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const authorization = getAuthorization();
+  const headers = new Headers(init?.headers);
+  if (authorization && !headers.has('Authorization')) {
+    headers.set('Authorization', authorization);
+  }
+  return fetch(input, { ...init, headers }).then(res => {
+    if (res.status === 401) {
+      authStorage.clearAll();
+      redirectToLogin();
+    }
+    return res;
+  });
+}
+

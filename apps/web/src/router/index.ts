@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import Editor from '../views/Editor.vue'
 import DocumentWizard from '../views/DocumentWizard.vue'
 import Login from '../views/Login.vue'
+import Register from '../views/Register.vue'
 import ProjectQA from '../views/ProjectQA.vue'
 import Settings from '../views/Settings.vue'
 import TemplateDetail from '../views/TemplateDetail.vue'
@@ -13,6 +14,12 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'Login',
     component: Login,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: Register,
     meta: { requiresAuth: false }
   },
   {
@@ -72,8 +79,8 @@ router.beforeEach((to, from, next) => {
       query: { redirect: to.fullPath } // 保存原始路径，登录后可以跳转回去
     })
   } 
-  // 如果已登录用户访问登录页，重定向到首页
-  else if (to.path === '/login' && isAuthenticated) {
+  // 如果已登录用户访问登录页或注册页，重定向到首页
+  else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
     next('/')
   } 
   else {

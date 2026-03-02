@@ -2,6 +2,7 @@
  * Workflow API 服务
  * 基于 LangGraph ReAct Agent，提供流式对话接口
  */
+import { authFetch } from '@/utils/auth'
 
 export interface WorkflowChatRequest {
   message: string
@@ -11,6 +12,9 @@ export interface WorkflowChatRequest {
   user_id?: string
   document_id?: string  // 文档 ID，用作 session_id
   enable_audit?: boolean  // 是否启用校验
+  // 标签字段：用于动态知识库选择
+  profession_tag_id?: number  // 专业标签 ID
+  business_type_tag_id?: number  // 业态标签 ID
 }
 
 export interface SSEEvent {
@@ -33,7 +37,7 @@ export async function workflowChatStream(
 ): Promise<void> {
   const url = `${WORKFLOW_BASE_URL}/workflow/chat/stream`
 
-  const response = await fetch(url, {
+  const response = await authFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

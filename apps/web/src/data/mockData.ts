@@ -28,6 +28,8 @@ export interface ProjectInfo {
   roofWaterproofLife?: string // 屋面防水合理使用年限
   energyEfficiencyRequirement?: string // 节能要求
   barrierFreeRequirement?: string // 无障碍要求
+  professionTagId?: number    // 专业标签 ID（单选）
+  businessTypeTagId?: number  // 业态标签 ID（单选）
 }
 
 export interface DocumentItem {

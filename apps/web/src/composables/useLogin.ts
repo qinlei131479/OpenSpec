@@ -6,7 +6,6 @@ import { login as loginApi } from '@/service/user';
 import type { LoginParams, UserData } from '@/service/user';
 import { authStorage } from '@/utils/auth';
 import type { UserInfo } from '@/utils/auth';
-import { encryptPassword } from '@/utils/rsa';
 
 export interface UseLoginReturn {
   loading: Ref<boolean>;
@@ -16,7 +15,6 @@ export interface UseLoginReturn {
 
 /**
  * 登录 Composable
- * @returns 登录相关的状态和方法
  */
 export function useLogin(): UseLoginReturn {
   const loading = ref(false);
@@ -27,28 +25,16 @@ export function useLogin(): UseLoginReturn {
     error.value = null;
 
     try {
-      // 1. 使用 RSA 加密密码
-      const encryptedPassword = encryptPassword(params.password);
-
-      // 2. 调用登录接口
       const loginParams: LoginParams = {
         email: params.email.trim(),
-        password: encryptedPassword,
+        password: params.password,
       };
 
-      const { data: response, response: httpResponse } = await loginApi(loginParams);
+      const response = await loginApi(loginParams);
 
-      // 3. 处理登录结果
-      if (response.code === 0 && response.data) {
+      if (response.code === 200 && response.data) {
         const userData = response.data;
-        
-        // 4. 从响应头获取 Authorization token
-        // axios 会将响应头转换为小写
-        const authorization = httpResponse.headers['authorization'] 
-          || httpResponse.headers['Authorization']
-          || `Bearer ${userData.access_token}`;
 
-        // 5. 保存认证信息
         const userInfo: UserInfo = {
           id: userData.id,
           email: userData.email,
@@ -58,7 +44,7 @@ export function useLogin(): UseLoginReturn {
         };
 
         authStorage.setAuthData({
-          Authorization: authorization,
+          Authorization: `Bearer ${userData.access_token}`,
           Token: userData.access_token,
           userInfo: userInfo,
         });
@@ -69,7 +55,7 @@ export function useLogin(): UseLoginReturn {
         return response.code || -1;
       }
     } catch (err: any) {
-      error.value = err.response?.data?.message || err.message || '登录失败，请检查网络连接';
+      error.value = err.message || '登录失败，请检查网络连接';
       return -1;
     } finally {
       loading.value = false;
@@ -82,4 +68,3 @@ export function useLogin(): UseLoginReturn {
     error,
   };
 }
-

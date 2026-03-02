@@ -1,4 +1,6 @@
 // RAGFlow 服务接口
+import { authFetch } from '@/utils/auth'
+
 export interface OutlineItem {
   id: number
   title: string
@@ -74,6 +76,9 @@ interface GenerateParagraphRequest {
   // 新增字段：支持 Langfuse session 追踪
   document_id?: string, // 文档 ID（用于 session 关联）
   user_id?: string, // 用户 ID
+  // 标签字段：用于动态知识库选择
+  professionTagId?: number, // 专业标签 ID
+  businessTypeTagId?: number, // 业态标签 ID
 }
 
 /**
@@ -148,11 +153,13 @@ export async function generateParagraphBatch(
       document_id: payload.document_id,  // 传递 document_id 用于 session 关联
       user_id: payload.user_id,          // 传递 user_id
       chapter_name: payload.chapterName, // 传递章节名称
+      profession_tag_id: payload.professionTagId,      // 标签：专业
+      business_type_tag_id: payload.businessTypeTagId,  // 标签：业态
     };
 
     const url = `${RAGFLOW_BASE_URL}/agent/workflow/chat/batch`;
 
-    const response = await fetch(url, {
+    const response = await authFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -230,7 +237,7 @@ export async function generateParagraphStream(
     };
 
     // 发起流式请求
-    const response = await fetch(fullUrl, requestOptions);
+    const response = await authFetch(fullUrl, requestOptions);
 
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`);
@@ -365,7 +372,7 @@ export async function uploadFile(file: File, datasetName: string): Promise<Ragfl
     const uploadUrl = `${RAGFLOW_BASE_URL}/agent/file/upload`
     
     try {
-        const uploadRes = await fetch(uploadUrl, {
+        const uploadRes = await authFetch(uploadUrl, {
             method: 'POST',
             body: form
         })
@@ -391,7 +398,7 @@ export async function uploadFile(file: File, datasetName: string): Promise<Ragfl
 export async function parseFile(fileId: string, datasetName: string): Promise<RagflowResponse> {
     const parseUrl = `${RAGFLOW_BASE_URL}/agent/file/parse`
     try {
-        const parseRes = await fetch(parseUrl, {
+        const parseRes = await authFetch(parseUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -423,7 +430,7 @@ export async function parseFile(fileId: string, datasetName: string): Promise<Ra
 export async function extractKey(fileId: string, datasetName: string, input_query: string = ''): Promise<RagflowResponse> {
     const extractUrl = `${RAGFLOW_BASE_URL}/agent/file/extract_key`
     try {
-        const extractRes = await fetch(extractUrl, {
+        const extractRes = await authFetch(extractUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -491,7 +498,7 @@ export async function uploadAndParseFile(file: File, datasetName = 'test_ygy'): 
 
 async function handlePostRequest(url: string, requestBody: any):Promise<RagflowResponse>{
      try {
-       const response = await fetch(url, {
+       const response = await authFetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -559,7 +566,7 @@ export async function generateParagraphStreamWithMemory(
     };
 
     // 发起流式请求
-    const response = await fetch(fullUrl, requestOptions);
+    const response = await authFetch(fullUrl, requestOptions);
 
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`);

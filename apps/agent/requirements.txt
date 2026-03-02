@@ -27,6 +27,9 @@ langchain==1.2.0
 # ipython
 python-multipart==0.0.21
 
+# JWT authentication
+PyJWT>=2.8.0
+
 # PostgreSQL support for LangGraph Memory and Peewee
 psycopg[binary]>=3.1.0
 langgraph-checkpoint-postgres>=1.0.0

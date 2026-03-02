@@ -19,6 +19,7 @@ from api.rag_api import rag_router
 from api.file_api import file_router
 from api.workflow_api import workflow_router
 from api.template_api import template_router
+from middleware.jwt_auth import JwtAuthMiddleware
 from utils.logger import setup_logger
 
 # 加载环境变量
@@ -45,6 +46,9 @@ app.add_middleware(
     allow_methods=["*"],  # 允许所有HTTP方法
     allow_headers=["*"],  # 允许所有HTTP头
 )
+
+# 添加 JWT 认证中间件（在 CORS 之后）
+app.add_middleware(JwtAuthMiddleware)
 
 # 全局异常处理器
 @app.exception_handler(Exception)

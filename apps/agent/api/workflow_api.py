@@ -21,9 +21,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 导入 Agent 工作流
 from service.workflow.construction_agent import (
     app as agent_app,
-    set_kb_ids
 )
 from service.workflow.batch_construction_agent import generate_chapter_batch
+from service.tools.construction_tools import set_request_kb_ids, clear_request_kb_ids
+from service.tools.kb_resolver import resolve as resolve_kb
 # from service.db.database import get_kb_id_by_project_id
 
 # Langfuse integration
@@ -126,10 +127,14 @@ class WorkflowChatRequest(BaseModel):
     document_id: Optional[str] = None  # 文档 ID（用作 thread_id）
     chapter_name: Optional[str] = None  # 当前生成的章节名称
     resume_session: Optional[bool] = True  # 是否恢复历史 Session（默认 True）
-    
+
     # 记忆区间控制
     memory_window: Optional[int] = None  # 保留最近 N 轮对话（None=全部，0=不保留）
     memory_chapters: Optional[List[str]] = None  # 指定保留的章节名称列表
+
+    # 标签字段：用于动态知识库选择
+    profession_tag_id: Optional[int] = None  # 专业标签 ID
+    business_type_tag_id: Optional[int] = None  # 业态标签 ID
 
 # =============================================================================
 # SSE 辅助函数
@@ -772,6 +777,10 @@ class WorkflowBatchRequest(BaseModel):
     document_id: Optional[str] = None  # 文档 ID（用作 thread_id/session_id）
     chapter_name: Optional[str] = None  # 当前生成的章节名称
 
+    # 标签字段：用于动态知识库选择
+    profession_tag_id: Optional[int] = None  # 专业标签 ID
+    business_type_tag_id: Optional[int] = None  # 业态标签 ID
+
 
 @workflow_router.post("/chat/batch")
 async def workflow_chat_batch(request: WorkflowBatchRequest):
@@ -784,43 +793,52 @@ async def workflow_chat_batch(request: WorkflowBatchRequest):
     if not request.message:
         return {"success": False, "error": "Message is required"}
 
-    # 生成 thread_id（优先使用 document_id，确保同一文档的所有章节共享 Session）
-    thread_id = generate_thread_id(request.user_id, request.document_id or request.project_id)
-    logger.info(f"[workflow_chat_batch] Using thread_id for session: {thread_id}")
+    # 根据标签解析知识库 ID 并设置到请求级 context
+    kb_config = resolve_kb(request.profession_tag_id, request.business_type_tag_id)
+    logger.info(f"[workflow_chat_batch] KB 解析结果: source={kb_config['source']}, case={kb_config['case_kb_ids']}, standard={kb_config['standard_kb_ids']}")
+    set_request_kb_ids(kb_config["case_kb_ids"], kb_config["standard_kb_ids"])
 
-    # 创建 Langfuse handler（即使是批量接口也需要 tracing）
-    langfuse_handler, langfuse_metadata = get_langfuse_handler(
-        user_id=request.user_id,
-        session_id=thread_id,
-        metadata={
-            "document_id": request.document_id or request.project_id,
-            "chapter_name": request.chapter_name,
-            "project_id": request.project_id,
-            "batch_mode": True
-        }
-    )
-
-    # 调用批量生成，传入 langfuse_handler、metadata 和 thread_id
-    result = await generate_chapter_batch(
-        message=request.message,
-        template=request.template or "",
-        project_info=request.project_info or "",
-        project_id=request.project_id or "",
-        user_id=request.user_id,
-        langfuse_handler=langfuse_handler,
-        langfuse_metadata=langfuse_metadata,
-        thread_id=thread_id  # 传递 thread_id 以支持 Langfuse session
-    )
-
-    # 刷新 Langfuse 数据
     try:
-        from langfuse import Langfuse
-        langfuse_client = Langfuse()
-        langfuse_client.flush()
-    except Exception as e:
-        logger.warning(f"Failed to flush Langfuse data: {e}")
+        # 生成 thread_id（优先使用 document_id，确保同一文档的所有章节共享 Session）
+        thread_id = generate_thread_id(request.user_id, request.document_id or request.project_id)
+        logger.info(f"[workflow_chat_batch] Using thread_id for session: {thread_id}")
 
-    return result
+        # 创建 Langfuse handler（即使是批量接口也需要 tracing）
+        langfuse_handler, langfuse_metadata = get_langfuse_handler(
+            user_id=request.user_id,
+            session_id=thread_id,
+            metadata={
+                "document_id": request.document_id or request.project_id,
+                "chapter_name": request.chapter_name,
+                "project_id": request.project_id,
+                "batch_mode": True,
+                "kb_source": kb_config["source"],
+            }
+        )
+
+        # 调用批量生成，传入 langfuse_handler、metadata 和 thread_id
+        result = await generate_chapter_batch(
+            message=request.message,
+            template=request.template or "",
+            project_info=request.project_info or "",
+            project_id=request.project_id or "",
+            user_id=request.user_id,
+            langfuse_handler=langfuse_handler,
+            langfuse_metadata=langfuse_metadata,
+            thread_id=thread_id  # 传递 thread_id 以支持 Langfuse session
+        )
+
+        # 刷新 Langfuse 数据
+        try:
+            from langfuse import Langfuse
+            langfuse_client = Langfuse()
+            langfuse_client.flush()
+        except Exception as e:
+            logger.warning(f"Failed to flush Langfuse data: {e}")
+
+        return result
+    finally:
+        clear_request_kb_ids()
 
 
 @workflow_router.post("/chat/stream")
@@ -902,16 +920,10 @@ async def workflow_chat_stream(request: WorkflowChatRequest):
     # 项目信息： 从请求中获取，或使用默认值
     project_info = request.project_info or ""
 
-
-    # TODO: 根据企业情况，动态设置知识库 ID
-    # if request.project_id:
-    #     kb_id = get_kb_id_by_project_id(request.project_id)
-    #     if kb_id:
-    #         logger.info(f"为项目 {request.project_id} 设置知识库: {kb_id}")
-    #         # 这里假设 kb_id 包含案例和规范，可以根据实际情况调整
-    #         set_kb_ids(case_ids=[kb_id], standard_ids=[kb_id])
-    #     else:
-    #         logger.warning(f"项目 {request.project_id} 未关联知识库")
+    # 根据标签解析知识库 ID 并设置到请求级 context
+    kb_config = resolve_kb(request.profession_tag_id, request.business_type_tag_id)
+    logger.info(f"[workflow_chat_stream] KB 解析结果: source={kb_config['source']}, case={kb_config['case_kb_ids']}, standard={kb_config['standard_kb_ids']}")
+    set_request_kb_ids(kb_config["case_kb_ids"], kb_config["standard_kb_ids"])
 
     inputs = {
         "messages": [HumanMessage(content=request.message)],
@@ -931,8 +943,16 @@ async def workflow_chat_stream(request: WorkflowChatRequest):
 
     logger.info("[workflow_chat_stream] 开始流式响应")
 
+    async def stream_with_kb_cleanup():
+        """包装 event_generator，确保流结束后清理请求级知识库"""
+        try:
+            async for chunk in event_generator(inputs, config):
+                yield chunk
+        finally:
+            clear_request_kb_ids()
+
     return StreamingResponse(
-        event_generator(inputs, config),  # 传入完整的 config（包含 callbacks、metadata、tags、configurable）
+        stream_with_kb_cleanup(),
         media_type="text/event-stream",
         headers={
             'Cache-Control': 'no-cache, no-store, must-revalidate',

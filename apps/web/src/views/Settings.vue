@@ -362,32 +362,32 @@
       <div class="tag-selection-container">
         <!-- 专业分类 -->
         <div class="tag-category">
-          <h4 class="category-title">专业分类</h4>
+          <h4 class="category-title">专业分类（单选）</h4>
           <div class="tag-grid">
             <el-tag
               v-for="tag in professionTags"
               :key="tag.id"
-              :type="selectedTags.includes(tag.id) ? 'primary' : 'info'"
-              :effect="selectedTags.includes(tag.id) ? 'dark' : 'plain'"
+              :type="selectedProfessionTagId === tag.id ? 'primary' : 'info'"
+              :effect="selectedProfessionTagId === tag.id ? 'dark' : 'plain'"
               class="tag-selectable"
-              @click="toggleTag(tag.id)"
+              @click="toggleTag(tag.id, 'profession')"
             >
               {{ tag.name }}
             </el-tag>
           </div>
         </div>
-        
+
         <!-- 业态分类 -->
         <div class="tag-category">
-          <h4 class="category-title">业态分类</h4>
+          <h4 class="category-title">业态分类（单选）</h4>
           <div class="tag-grid">
             <el-tag
               v-for="tag in businessTypeTags"
               :key="tag.id"
-              :type="selectedTags.includes(tag.id) ? 'primary' : 'info'"
-              :effect="selectedTags.includes(tag.id) ? 'dark' : 'plain'"
+              :type="selectedBusinessTypeTagId === tag.id ? 'primary' : 'info'"
+              :effect="selectedBusinessTypeTagId === tag.id ? 'dark' : 'plain'"
               class="tag-selectable"
-              @click="toggleTag(tag.id)"
+              @click="toggleTag(tag.id, 'business_type')"
             >
               {{ tag.name }}
             </el-tag>
@@ -432,7 +432,7 @@ import {
   Edit
 } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { authStorage } from '../utils/auth'
+import { authStorage, authFetch } from '../utils/auth'
 import HeaderLogo from '../components/HeaderLogo.vue'
 import { useLogout } from '../composables/useLogout'
 import {
@@ -587,7 +587,7 @@ const uploadDocumentTemplate = async (userInfo: any) => {
   formData.append('datasetName', PERSONAL_TEMPLATE_KB_NAME)
 
   console.log(`开始上传文档模板到 agent 服务 (知识库: ${PERSONAL_TEMPLATE_KB_NAME})...`)
-  const uploadResponse = await fetch('/agent/file/upload', {
+  const uploadResponse = await authFetch('/agent/file/upload', {
     method: 'POST',
     body: formData
   })
@@ -633,7 +633,7 @@ const uploadDocumentTemplate = async (userInfo: any) => {
   const templateId = createResponse.data?.id
 
   try {
-    const metaFieldsResponse = await fetch('/agent/file/set_meta_fields', {
+    const metaFieldsResponse = await authFetch('/agent/file/set_meta_fields', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -677,7 +677,7 @@ const uploadCadTemplate = async (userInfo: any) => {
   formData.append('datasetName', PERSONAL_TEMPLATE_KB_NAME)
   
   console.log(`开始上传CAD模板到 agent 服务 (知识库: ${PERSONAL_TEMPLATE_KB_NAME})...`)
-  const uploadResponse = await fetch('/agent/file/upload', {
+  const uploadResponse = await authFetch('/agent/file/upload', {
     method: 'POST',
     body: formData
   })
@@ -702,7 +702,7 @@ const uploadCadTemplate = async (userInfo: any) => {
   const fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase()
   
   // 注意：CAD模板每个用户只保留一份，新上传会覆盖旧的
-  const createResponse = await fetch('/api/v1/cad-templates', {
+  const createResponse = await authFetch('/api/v1/cad-templates', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -735,25 +735,33 @@ const uploadCadTemplate = async (userInfo: any) => {
 
 // 标签对话框
 const tagDialogVisible = ref(false)
-const selectedTags = ref<number[]>([])
+const selectedProfessionTagId = ref<number | null>(null)
+const selectedBusinessTypeTagId = ref<number | null>(null)
 const currentTemplateId = ref<number | null>(null)
 
 const setTemplateTags = (template: DocumentTemplate) => {
   currentTemplateId.value = template.id
-  // 如果tags为undefined或null，则初始化为空数组
-  selectedTags.value = template.tags ? template.tags.map(tag => tag.id) : []
+  // 从已有标签中找出专业和业态各一个
+  selectedProfessionTagId.value = null
+  selectedBusinessTypeTagId.value = null
+  if (template.tags) {
+    for (const tag of template.tags) {
+      if (tag.category === 'profession' && selectedProfessionTagId.value === null) {
+        selectedProfessionTagId.value = tag.id
+      } else if (tag.category === 'business_type' && selectedBusinessTypeTagId.value === null) {
+        selectedBusinessTypeTagId.value = tag.id
+      }
+    }
+  }
   tagDialogVisible.value = true
 }
 
-// 切换标签选中状态
-const toggleTag = (tagId: number) => {
-  const index = selectedTags.value.indexOf(tagId)
-  if (index > -1) {
-    // 已选中，则取消选中
-    selectedTags.value.splice(index, 1)
+// 切换标签选中状态（单选：同类只允许一个）
+const toggleTag = (tagId: number, category: 'profession' | 'business_type') => {
+  if (category === 'profession') {
+    selectedProfessionTagId.value = selectedProfessionTagId.value === tagId ? null : tagId
   } else {
-    // 未选中，则添加
-    selectedTags.value.push(tagId)
+    selectedBusinessTypeTagId.value = selectedBusinessTypeTagId.value === tagId ? null : tagId
   }
 }
 
@@ -764,16 +772,21 @@ const confirmSetTags = async () => {
   }
 
   try {
-    const response = await setDocumentTemplateTags(currentTemplateId.value, selectedTags.value)
+    // 构建选中的标签 ID 列表（兼容后端 junction table 接口）
+    const tagIds: number[] = []
+    if (selectedProfessionTagId.value) tagIds.push(selectedProfessionTagId.value)
+    if (selectedBusinessTypeTagId.value) tagIds.push(selectedBusinessTypeTagId.value)
+
+    const response = await setDocumentTemplateTags(currentTemplateId.value, tagIds)
     if (response.code === 200) {
       ElMessage.success('标签设置成功')
 
-      // 同步更新 RAGFlow 文档的 meta_fields 中的 tags
+      // 同步更新 RAGFlow 文档的 meta_fields（分字段存储）
       const template = documentTemplates.value.find(t => t.id === currentTemplateId.value)
       if (template?.filePath) {
         const userInfo = authStorage.getUserInfo()
         try {
-          const metaFieldsResponse = await fetch('/agent/file/set_meta_fields', {
+          const metaFieldsResponse = await authFetch('/agent/file/set_meta_fields', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -785,7 +798,8 @@ const confirmSetTags = async () => {
               isStandard: template.isStandard ? 'true' : 'false',
               templateId: String(template.id),
               templateName: template.name,
-              tags: selectedTags.value.join(','),
+              profession: selectedProfessionTagId.value ? String(selectedProfessionTagId.value) : '',
+              business_type: selectedBusinessTypeTagId.value ? String(selectedBusinessTypeTagId.value) : '',
               fileType: template.fileType
             })
           })
@@ -992,7 +1006,7 @@ const testExtracting = async (id: number) => {
       datasetName: PERSONAL_TEMPLATE_KB_NAME
     })
 
-    const chaptersResponse = await fetch('/agent/file/extract_chapters', {
+    const chaptersResponse = await authFetch('/agent/file/extract_chapters', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1125,7 +1139,7 @@ const startParsing = async (id: number) => {
     ElMessage.info('开始解析文档...')
 
     // 调用agent服务的parse接口
-    const response = await fetch('/agent/file/parse', {
+    const response = await authFetch('/agent/file/parse', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1159,7 +1173,7 @@ const startParsing = async (id: number) => {
     await updateTemplateStatus(id, 'extracting')
     ElMessage.info('文档解析完成，开始提取章节目录...')
 
-    const chaptersResponse = await fetch('/agent/file/extract_chapters', {
+    const chaptersResponse = await authFetch('/agent/file/extract_chapters', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1305,7 +1319,7 @@ const deleteTemplate = async (id: number) => {
     if (template?.filePath) {
       // 2. 先删除 RAGFlow 知识库中的文档
       try {
-        const ragflowResponse = await fetch('/agent/file/delete', {
+        const ragflowResponse = await authFetch('/agent/file/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1407,7 +1421,7 @@ const batchDeleteTemplates = async () => {
 
     if (fileIds.length > 0) {
       try {
-        const ragflowResponse = await fetch('/agent/file/delete', {
+        const ragflowResponse = await authFetch('/agent/file/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1497,7 +1511,7 @@ const downloadCadTemplate = async () => {
     console.log('开始下载CAD模板, fileId:', fileId)
     
     // 从agent服务下载文件
-    const response = await fetch(`/agent/file/download/${fileId}`, {
+    const response = await authFetch(`/agent/file/download/${fileId}`, {
       method: 'GET'
     })
     
@@ -1540,7 +1554,7 @@ const downloadTemplate = async (template: DocumentTemplateType) => {
     console.log('agent fileId:', fileId)
     
     // 从agent服务下载文件
-    const downloadResponse = await fetch(`/agent/file/download/${fileId}`, {
+    const downloadResponse = await authFetch(`/agent/file/download/${fileId}`, {
       method: 'GET'
     })
     
@@ -1590,7 +1604,7 @@ const deleteCadTemplate = async () => {
     const fileId = cadTemplate.value.filePath
     if (fileId) {
       try {
-        const ragflowResponse = await fetch('/agent/file/delete', {
+        const ragflowResponse = await authFetch('/agent/file/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1608,7 +1622,7 @@ const deleteCadTemplate = async () => {
     }
 
     // 2. 删除数据库记录
-    const response = await fetch(`/api/v1/cad-templates/${userInfo.id}`, {
+    const response = await authFetch(`/api/v1/cad-templates/${userInfo.id}`, {
       method: 'DELETE'
     })
 

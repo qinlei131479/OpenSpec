@@ -31,6 +31,11 @@ logging:
   level:
     com.aiid.aidoc: INFO
 
+# JWT 配置
+jwt:
+  secret: ${JWT_SECRET:archspec-default-jwt-secret-key-2024}
+  expiration: 604800000  # 7天
+
 # 授权配置
 license:
   enabled: true

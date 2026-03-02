@@ -137,7 +137,7 @@ import {
   Clock, 
   Loading 
 } from '@element-plus/icons-vue'
-import { authStorage } from '../utils/auth'
+import { authStorage, authFetch } from '../utils/auth'
 import HeaderLogo from '../components/HeaderLogo.vue'
 import { useLogout } from '../composables/useLogout'
 import type { DocumentTemplate, TemplateTag } from '../service/template'
@@ -204,7 +204,7 @@ const loadTemplateDetail = async () => {
     loading.value = true
 
     // 获取模板基本信息（包含content和chapters）
-    const infoResponse = await fetch(`/api/v1/document-templates/${templateId}`)
+    const infoResponse = await authFetch(`/api/v1/document-templates/${templateId}`)
     if (!infoResponse.ok) {
       throw new Error('获取模板信息失败')
     }
@@ -247,7 +247,7 @@ const loadTemplateDetail = async () => {
 // 从agent服务加载内容（降级方案）
 const loadFromAgent = async (fileId: string) => {
   try {
-    const chunksResponse = await fetch('/agent/file/get_chunks', {
+    const chunksResponse = await authFetch('/agent/file/get_chunks', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -266,31 +266,31 @@ const loadFromAgent = async (fileId: string) => {
     console.log('从agent获取的chunks:', chunksResult)
 
     if (chunksResult.code === 200 && chunksResult.data && Array.isArray(chunksResult.data)) {
-      // 直接使用chunks数据构建content和chapters
+      // 直接从chunks构建目录和章节，不经过parseChunksContent的正则匹配
       const chunks = chunksResult.data
-      const contentParts: string[] = []
-      const chapterList: any[] = []
-      
+      const catalogList: CatalogItem[] = []
+      const sectionList: Section[] = []
+
       chunks.forEach((chunk: any, index: number) => {
-        contentParts.push(`## Chunk ${index + 1}\n${chunk.content}\n`)
-        
-        if (chunk.important_keywords && chunk.important_keywords.length > 0) {
-          chapterList.push({
-            id: `chunk-${index}`,
-            title: chunk.important_keywords[0] || `Chunk ${index + 1}`,
-            level: 1
-          })
-        } else {
-          chapterList.push({
-            id: `chunk-${index}`,
-            title: `章节 ${index + 1}`,
-            level: 1
-          })
-        }
+        const id = `chunk-${index}`
+        const title = (chunk.important_keywords && chunk.important_keywords.length > 0)
+          ? chunk.important_keywords[0]
+          : `章节 ${index + 1}`
+
+        catalogList.push({ id, title, level: 1 })
+        sectionList.push({
+          id,
+          title,
+          level: 1,
+          content: (chunk.content || '').replace(/\n/g, '<br>')
+        })
       })
-      
-      const content = contentParts.join('\n---\n\n')
-      parseChunksContent(content, chapterList)
+
+      catalog.value = catalogList
+      sections.value = sectionList
+      if (catalogList.length > 0) {
+        currentSection.value = catalogList[0].id
+      }
     }
   } catch (error) {
     console.error('从agent加载内容失败:', error)
