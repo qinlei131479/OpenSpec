@@ -106,7 +106,7 @@ The system is powered by a **three-agent workflow**, where each agent can autono
 Try OpenSpec online: **[https://archspec.aizzyun.com/](https://archspec.aizzyun.com/)**
 
 - Email: `test@qq.com`
-- Password: `test`
+- Password: `test123456`
 
 ## Tech Stack
 

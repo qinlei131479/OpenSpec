@@ -103,7 +103,7 @@
 试用地址：**[https://archspec.aizzyun.com/](https://archspec.aizzyun.com/)**
 
 - 账号：`test@qq.com`
-- 密码：`test`
+- 密码：`test123456`
 
 ## 技术栈
 
