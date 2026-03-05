@@ -216,6 +216,26 @@ INSERT INTO template_tags (name, category, is_system, sort_order, user_id) VALUE
 ('体育场馆', 'business_type', TRUE, 8, NULL)
 ON CONFLICT (name, category, user_id) DO NOTHING;
 
+-- 7. 用户记忆表（长期记忆 - pgvector）
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS user_memory (
+  id BIGSERIAL PRIMARY KEY,
+  user_id VARCHAR(50) NOT NULL,
+  content TEXT NOT NULL,
+  embedding vector(1024),
+  chapter_name VARCHAR(200),
+  source_type VARCHAR(50) DEFAULT 'requirement',
+  category VARCHAR(50) DEFAULT 'other',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_memory_user_id ON user_memory(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_memory_source_type ON user_memory(user_id, source_type);
+
+-- 兼容升级：已有表添加 category 列
+ALTER TABLE user_memory ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'other';
+
 DO $$
 BEGIN
     RAISE NOTICE 'Database initialized successfully!';

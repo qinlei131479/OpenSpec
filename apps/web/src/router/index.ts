@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import Home from '../views/Home.vue'
+import CreateDocument from '../views/CreateDocument.vue'
 import Editor from '../views/Editor.vue'
-import DocumentWizard from '../views/DocumentWizard.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import ProjectQA from '../views/ProjectQA.vue'
@@ -10,6 +11,7 @@ import TemplateDetail from '../views/TemplateDetail.vue'
 import { authStorage } from '../utils/auth'
 
 const routes: RouteRecordRaw[] = [
+  // 公开路由
   {
     path: '/login',
     name: 'Login',
@@ -22,22 +24,36 @@ const routes: RouteRecordRaw[] = [
     component: Register,
     meta: { requiresAuth: false }
   },
+
+  // 主页（新增）
   {
     path: '/',
-    redirect: '/editor'
+    redirect: '/home'
   },
   {
-    path: '/wizard',
-    name: 'DocumentWizard',
-    component: DocumentWizard,
+    path: '/home',
+    name: 'Home',
+    component: Home,
+    meta: { requiresAuth: false }
+  },
+
+  // 文档新建（新增）
+  {
+    path: '/create',
+    name: 'CreateDocument',
+    component: CreateDocument,
     meta: { requiresAuth: true }
   },
+
+  // 文档编辑（精简，id 必填）
   {
-    path: '/editor/:id?',
+    path: '/editor/:id',
     name: 'Editor',
     component: Editor,
     meta: { requiresAuth: true }
   },
+
+  // 其他保持不变
   {
     path: '/qa',
     name: 'ProjectQA',
@@ -56,9 +72,11 @@ const routes: RouteRecordRaw[] = [
     component: TemplateDetail,
     meta: { requiresAuth: true }
   },
+
+  // 兜底
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/'
+    redirect: '/home'
   }
 ]
 
@@ -78,11 +96,11 @@ router.beforeEach((to, from, next) => {
       path: '/login',
       query: { redirect: to.fullPath } // 保存原始路径，登录后可以跳转回去
     })
-  } 
+  }
   // 如果已登录用户访问登录页或注册页，重定向到首页
   else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
-    next('/')
-  } 
+    next('/home')
+  }
   else {
     next()
   }

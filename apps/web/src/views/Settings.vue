@@ -1,68 +1,16 @@
 <template>
   <div class="settings-page">
-    <!-- 顶部导航栏 -->
-    <header class="header">
-      <div class="header-content">
-        <div class="header-left">
-          <HeaderLogo />
-          <!-- <nav class="nav-menu">
-            <router-link class="nav-item active" to="/settings">设置</router-link>
-          </nav> -->
-        </div>
-        <div class="user-info">
-          <el-dropdown trigger="click" @command="handleUserCommand">
-            <div class="user-avatar">
-              {{ userInfo?.nickname?.charAt(0) || userInfo?.name?.charAt(0) || '设' }}
-            </div>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item disabled>
-                  <div class="user-dropdown-info">
-                    <div class="user-dropdown-name">{{ userInfo?.nickname || userInfo?.name || '用户' }}</div>
-                    <div class="user-dropdown-email">{{ userInfo?.email || '' }}</div>
-                  </div>
-                </el-dropdown-item>
-                <el-dropdown-item divided command="editor">
-                  返回编辑器
-                </el-dropdown-item>
-                <el-dropdown-item command="logout">
-                  退出登录
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
-    </header>
-
     <!-- 主体容器：左侧菜单 + 右侧内容 -->
     <div class="settings-container">
-      <!-- 左侧菜单 -->
-      <aside class="settings-sidebar">
-        <div class="menu-list">
-          <div 
-            class="menu-item"
-            :class="{ active: currentMenu === 'templates' }"
-            @click="currentMenu = 'templates'"
-          >
-            <el-icon><Document /></el-icon>
-            <span>文档模版</span>
-          </div>
-          <div 
-            class="menu-item"
-            :class="{ active: currentMenu === 'tags' }"
-            @click="currentMenu = 'tags'"
-          >
-            <el-icon><Collection /></el-icon>
-            <span>模板标签</span>
-          </div>
-        </div>
-      </aside>
-
-      <!-- 右侧内容区 -->
-      <main class="settings-main">
-        <!-- 个人模板页面 -->
-        <div v-if="currentMenu === 'templates'" class="template-section">
+      <el-tabs v-model="currentMenu" class="settings-tabs">
+        <el-tab-pane name="templates">
+          <template #label>
+            <span class="custom-tabs-label">
+              <el-icon><Document /></el-icon>
+              <span>文档模版</span>
+            </span>
+          </template>
+          <div class="template-section">
           <div class="section-header">
             <h2>个人模板管理</h2>
             <p class="section-desc">管理您的文档模板和CAD模板</p>
@@ -257,9 +205,16 @@
             <el-empty v-else description="暂无CAD模板，请上传" />
           </div>
         </div>
+        </el-tab-pane>
 
-        <!-- 模板标签页面 -->
-        <div v-if="currentMenu === 'tags'" class="tags-section">
+        <el-tab-pane name="tags">
+          <template #label>
+            <span class="custom-tabs-label">
+              <el-icon><Collection /></el-icon>
+              <span>模板标签</span>
+            </span>
+          </template>
+          <div class="tags-section">
           <div class="section-header">
             <h2>模板标签管理</h2>
             <p class="section-desc">管理模板分类标签，支持按专业和业态分类</p>
@@ -313,7 +268,8 @@
             </div>
           </div>
         </div>
-      </main>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <!-- 上传模板对话框 -->
@@ -417,6 +373,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document,
@@ -431,7 +388,6 @@ import {
   View,
   Edit
 } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
 import { authStorage, authFetch } from '../utils/auth'
 import HeaderLogo from '../components/HeaderLogo.vue'
 import { useLogout } from '../composables/useLogout'
@@ -453,17 +409,20 @@ import {
   type CadTemplate as CadTemplateType
 } from '../service/template'
 
-// 用户信息
-const { logout } = useLogout()
+const emit = defineEmits<{
+  navigate: [path: string]
+}>()
+
 const router = useRouter()
+const { logout } = useLogout()
 const userInfo = computed(() => authStorage.getUserInfo())
 
 // 处理用户下拉菜单命令
 const handleUserCommand = async (command: string) => {
-  if (command === 'logout') {
+  if (command === 'editor') {
+    router.push('/')
+  } else if (command === 'logout') {
     await logout()
-  } else if (command === 'editor') {
-    router.push('/editor')
   }
 }
 
@@ -971,7 +930,7 @@ const viewTemplateDetail = (id: number) => {
   // 查找模板，只有解析成功的模板才能查看详情
   const template = documentTemplates.value.find(t => t.id === id)
   if (template && (template.status === 'completed' || template.status === 'success')) {
-    router.push(`/template/${id}`)
+    window.open(`/template/${id}`, '_blank')
   } else if (template && template.status !== 'completed' && template.status !== 'success') {
     ElMessage.warning('请先完成模板解析')
   }
@@ -1687,162 +1646,70 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 设置页面样式 */
+/* 组件容器 */
 .settings-page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--gray-50);
+  height: 100%;
+  overflow-y: auto;
 }
 
-/* Header样式（与其他页面保持一致） */
-.header {
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  backdrop-filter: blur(10px);
-}
-
-.header-content {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 12px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-lg);
-}
-
-.nav-menu {
-  display: flex;
-  gap: var(--spacing-md);
-}
-
-.nav-item {
-  text-decoration: none;
-  color: var(--gray-600);
-  font-size: 14px;
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
-  font-weight: 500;
-}
-
-.nav-item:hover {
-  color: var(--primary-color);
-  background: var(--gray-100);
-}
-
-.nav-item.active {
-  color: var(--primary-color);
-  background: var(--primary-light);
-  font-weight: 600;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-lg);
-}
-
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
-  border: 2px solid rgba(255, 255, 255, 0.9);
-}
-
-.user-avatar:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
-}
-
-.user-dropdown-info {
-  padding: 4px 0;
-  min-width: 150px;
-}
-
-.user-dropdown-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  margin-bottom: 4px;
-}
-
-.user-dropdown-email {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-/* 设置容器 */
 .settings-container {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-/* 左侧菜单 */
-.settings-sidebar {
-  width: 200px;
-  background: white;
-  border-right: 1px solid var(--gray-200);
-  padding: 16px 0;
-}
-
-.menu-list {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
-.menu-item {
-  padding: 12px 20px;
+.settings-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-tabs-label {
   display: flex;
   align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--gray-700);
-  font-size: 14px;
-  border-left: 3px solid transparent;
+  gap: 6px;
+  font-size: 15px;
 }
 
-.menu-item:hover {
-  background: var(--gray-50);
+.settings-tabs :deep(.el-tabs__header) {
+  margin: 0 0 16px;
+  padding: 8px 24px 0;
+  background-color: #fff;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.settings-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none; /* Hide default bottom line since we added border to header */
+}
+
+.settings-tabs :deep(.el-tabs__item) {
+  font-size: 15px;
+  color: var(--gray-600);
+  padding: 0 20px !important;
+  height: 48px;
+  line-height: 48px;
+  transition: all 0.3s;
+}
+
+.settings-tabs :deep(.el-tabs__item:hover) {
   color: var(--primary-color);
 }
 
-.menu-item.active {
-  background: var(--primary-light);
+.settings-tabs :deep(.el-tabs__item.is-active) {
   color: var(--primary-color);
-  border-left-color: var(--primary-color);
   font-weight: 600;
 }
 
-/* 右侧内容区 */
-.settings-main {
+.settings-tabs :deep(.el-tabs__active-bar) {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background-color: var(--primary-color);
+}
+
+.settings-tabs :deep(.el-tabs__content) {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  background: var(--gray-50);
+  padding: 0 24px 24px;
 }
 
 .section-header {

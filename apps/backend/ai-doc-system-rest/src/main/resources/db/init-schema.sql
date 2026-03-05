@@ -121,6 +121,11 @@ CREATE TABLE IF NOT EXISTS template_tags (
 CREATE INDEX IF NOT EXISTS idx_template_tags_category ON template_tags(category);
 CREATE INDEX IF NOT EXISTS idx_template_tags_user ON template_tags(user_id);
 
+-- 部分唯一索引：修复 user_id 为 NULL 时 UNIQUE 约束失效的问题
+-- PostgreSQL 中 NULL != NULL，导致 ON CONFLICT 对系统标签不生效
+CREATE UNIQUE INDEX IF NOT EXISTS uk_template_tags_system_null_user
+ON template_tags (name, category) WHERE user_id IS NULL;
+
 -- 创建触发器
 DROP TRIGGER IF EXISTS update_template_tags_updated_at ON template_tags;
 CREATE TRIGGER update_template_tags_updated_at

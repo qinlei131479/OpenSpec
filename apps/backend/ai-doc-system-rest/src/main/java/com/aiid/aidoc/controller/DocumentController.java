@@ -39,6 +39,13 @@ public class DocumentController {
         return ApiResponse.success(resp);
     }
 
+    @GetMapping("/{id}")
+    public ApiResponse<Document> getById(@PathVariable String id) {
+        return documentService.findById(id)
+                .map(ApiResponse::success)
+                .orElseGet(() -> ApiResponse.message(404, "文档不存在"));
+    }
+
     @PostMapping("/create")
     public ApiResponse<Document> create(@Valid @RequestBody DocumentCreateRequest body) {
         Document doc = new Document();

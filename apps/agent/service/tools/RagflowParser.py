@@ -147,16 +147,27 @@ class RagflowParser:
             if not dataset or not hasattr(dataset, 'id'):
                 return {"success": False, "message": "Dataset 未初始化或无 ID"}
 
+            # 1. 先查找并删除同名文件，避免重复
+            try:
+                existing_docs = dataset.list_documents(name=display_name)
+                if existing_docs:
+                    doc_ids = [doc.id for doc in existing_docs]
+                    logger.info(f"发现同名文件 {display_name}，共 {len(doc_ids)} 个，准备删除: {doc_ids}")
+                    dataset.delete_documents(ids=doc_ids)
+                    logger.info(f"已删除同名文件: {doc_ids}")
+            except Exception as e:
+                logger.warning(f"删除同名文件失败（将继续上传）: {e}")
+
             url = f"{RAGFLOW_BASE_URL}/api/v1/datasets/{dataset.id}/documents"
             headers = {
                 "Authorization": f"Bearer {RAGFLOW_API_KEY}"
             }
-            
+
             # 构造 files 参数：{'file': ('filename', bytes)}
             files = {
                 "file": (display_name, blob)
             }
-            
+
             response = requests.post(url, headers=headers, files=files)
             # 接口说明 https://ragflow.com.cn/docs/http_api_reference#upload-documents
             if response.status_code == 200:
@@ -220,7 +231,7 @@ class RagflowParser:
                 print(f"Document {doc_id} status: {current_status}, chunks: {target_doc.chunk_count}, tokens: {target_doc.token_count}")
                 status = str(current_status)
 
-                if status == 'FAILED' or 'FAIL':
+                if status in ('FAILED', 'FAIL'):
                     print(f"Document {doc_id} parsing failed.")
                     return {"id": doc_id, "status": status, "chunk_count": target_doc.chunk_count, "token_count": target_doc.token_count}
                 elif status == 'DONE':
@@ -303,13 +314,15 @@ class RagflowParser:
             return []
         doc = documents[0]
         print('*'*30)
+        # print("document info:")
+        # print(doc)
         print(f"Document {doc_id} chunks: {doc.chunk_count}, tokens: {doc.token_count}")
         
         chunks = []
         chunk_list = []
         chunk_page_size = 0
        
-        if(chunk_size>0):
+        if(chunk_size<0):
              # 结合chunk_size和page, 分页获取chunk
             chunk_page_size = doc.chunk_count
             page_index = 1

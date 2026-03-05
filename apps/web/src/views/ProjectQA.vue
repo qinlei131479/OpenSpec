@@ -1,49 +1,26 @@
 <template>
   <div class="qa-page">
-    <header class="header">
-      <div class="header-content">
-        <div class="header-left">
-          <HeaderLogo />
-          <nav class="nav-menu">
-            <router-link class="nav-item" to="/editor">文档生成</router-link>
-            <router-link class="nav-item active" to="/qa">项目问答</router-link>
-          </nav>
+    <AppHeader>
+      <template #nav>
+        <router-link class="nav-item" to="/editor">文档生成</router-link>
+        <router-link class="nav-item active" to="/qa">项目问答</router-link>
+      </template>
+      <template #actions>
+        <div class="search-bar">
+          <el-input
+            v-model="searchText"
+            placeholder="输入项目问题，例如：设备房设置是否满足规范？"
+            class="qa-search-input"
+            clearable
+            @keyup.enter="submitQuestion"
+          >
+          </el-input>
+          <el-button @click="submitQuestion">
+            <el-icon><Search /></el-icon>
+          </el-button>
         </div>
-        <div class="header-right">
-          <div class="search-bar">
-            <el-input
-              v-model="searchText"
-              placeholder="输入项目问题，例如：设备房设置是否满足规范？"
-              class="qa-search-input"
-              clearable
-              @keyup.enter="submitQuestion"
-            >
-            </el-input>
-            <el-button @click="submitQuestion">
-              <el-icon><Search /></el-icon>
-            </el-button>
-          </div>
-          <el-dropdown trigger="click" @command="handleUserCommand">
-            <div class="user-avatar">
-              {{ userInfo?.nickname?.charAt(0) || userInfo?.name?.charAt(0) || '设' }}
-            </div>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item disabled>
-                  <div class="user-dropdown-info">
-                    <div class="user-dropdown-name">{{ userInfo?.nickname || userInfo?.name || '用户' }}</div>
-                    <div class="user-dropdown-email">{{ userInfo?.email || '' }}</div>
-                  </div>
-                </el-dropdown-item>
-                <el-dropdown-item divided command="logout" :icon="SwitchButton">
-                  退出登录
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
-    </header>
+      </template>
+    </AppHeader>
 
     <div class="qa-container">
       <ProjectList 
@@ -168,24 +145,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, ChatDotRound, SwitchButton } from '@element-plus/icons-vue'
-import HeaderLogo from '@/components/HeaderLogo.vue'
+import { Search, ChatDotRound } from '@element-plus/icons-vue'
+import AppHeader from '@/components/AppHeader.vue'
 import ProjectList from '@/components/ProjectList.vue'
-import { authStorage } from '@/utils/auth'
-import { useLogout } from '@/composables/useLogout'
 import { knowledgeItems as mockKnowledgeItems, knowledgeCategories as mockKnowledgeCategories, mockProjects, type ProjectItem } from '@/data/mockData'
-
-const router = useRouter()
-const { logout } = useLogout()
-const userInfo = computed(() => authStorage.getUserInfo())
-
-const handleUserCommand = async (command: string) => {
-  if (command === 'logout') {
-    await logout()
-  }
-}
 
 const searchText = ref('')
 const submitQuestion = () => {
@@ -319,35 +283,6 @@ const handleCreateSession = (projectId: string) => {
   flex-direction: column;
 }
 
-.header {
-  background: white;
-  border-bottom: 1px solid var(--gray-200);
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-}
-
-.header-content {
-  margin: 0 auto;
-  padding: 0 var(--spacing-lg);
-  height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
 .search-bar {
   display: flex;
 }
@@ -356,36 +291,12 @@ const handleCreateSession = (projectId: string) => {
   padding: 0;
 }
 
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.user-dropdown-info {
-  padding: 6px 10px;
-}
-.user-dropdown-name {
-  font-weight: 600;
-}
-.user-dropdown-email {
-  font-size: 12px;
-  color: var(--gray-600);
-}
-
 .qa-container {
   display: grid;
   grid-template-columns: 280px 1fr 320px;
   gap: var(--spacing-md);
   padding: var(--spacing-md) 0;
-  height: calc(100vh - 50px);
+  height: calc(100vh - 56px);
 }
 
 .qa-main {

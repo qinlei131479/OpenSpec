@@ -10,6 +10,7 @@ from service.tools.RagflowParser import RagflowParser, extract_from_chunks
 from pydantic import BaseModel
 from typing import Optional
 import logging
+import asyncio
 import requests
 
 # Configure basic logging
@@ -44,7 +45,8 @@ async def upload_file(file: UploadFile = File(...), datasetName: Optional[str] =
     try:
         content = await file.read()
         dataset_name = datasetName or "test_ygy"
-        api_result = parser.upload_blob_via_api(dataset_name, file.filename, content)
+        # upload_blob_via_api 是同步阻塞调用，使用 asyncio.to_thread 避免阻塞事件循环
+        api_result = await asyncio.to_thread(parser.upload_blob_via_api, dataset_name, file.filename, content)
         
         if not api_result or not api_result.get("id"):
             return {"code": 500, "message": "上传失败，未获取到文档ID", "data": None}
@@ -55,7 +57,7 @@ async def upload_file(file: UploadFile = File(...), datasetName: Optional[str] =
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.post('/delete')
-async def delete_file(request: FileProcessRequest):
+def delete_file(request: FileProcessRequest):
     """
     删除 RAGFlow 知识库中的文档
     支持单个删除（fileId）和批量删除（fileIds）
@@ -86,7 +88,7 @@ async def delete_file(request: FileProcessRequest):
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.post('/parse')
-async def parse_file(request: FileProcessRequest):
+def parse_file(request: FileProcessRequest):
     try:
         dataset_name = request.datasetName or "test_ygy"
         result = parser.parse_document_by_id(dataset_name, request.fileId)
@@ -100,7 +102,7 @@ async def parse_file(request: FileProcessRequest):
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.post('/get_chunks')
-async def get_file_chunks(request: FileProcessRequest):
+def get_file_chunks(request: FileProcessRequest):
     if not request.fileId:
         return {"code": 500, "message": "fileId is required", "data": None}
     try:
@@ -116,7 +118,7 @@ async def get_file_chunks(request: FileProcessRequest):
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.post('/extract_chapters')
-async def extract_chapters(request: FileProcessRequest):
+def extract_chapters(request: FileProcessRequest):
     """
     从文档chunks中提取章节目录结构
     使用大模型能力分析文档内容，生成准确的章节目录
@@ -176,7 +178,7 @@ async def extract_chapters(request: FileProcessRequest):
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.post('/extract_key')
-async def extract_key(request: FileProcessRequest):
+def extract_key(request: FileProcessRequest):
     if not request.fileId and not request.input_query:
         return {"code": 500, "message": "fileId or input_query is required", "data": None}
     try:
@@ -200,7 +202,7 @@ async def extract_key(request: FileProcessRequest):
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.post('/set_meta_fields')
-async def set_meta_fields(request: SetMetaFieldsRequest):
+def set_meta_fields(request: SetMetaFieldsRequest):
     """
     设置文档的元数据（meta_fields）
     用于上传模板文档后，添加用户信息、模板信息等元数据，用于后续的权限控制和智能检索
@@ -251,7 +253,7 @@ async def set_meta_fields(request: SetMetaFieldsRequest):
         return {"code": 500, "message": f"Internal Error: {str(e)}", "data": None}
 
 @file_router.get('/download/{file_id}')
-async def download_file(file_id: str):
+def download_file(file_id: str):
     """
     下载文件接口
     通过 Ragflow API 下载文件

@@ -67,15 +67,20 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     buildingFunction: {
       sources: ['使用功能.Function', 'Function', 'function'],
       processor: (value: any) => {
+        // 如果value是对象，尝试从中提取有用信息
+        if (typeof value === 'object' && value !== null) {
+            if (value.UseFunction) return value.UseFunction
+            if (value.useFunction) return value.useFunction
+            if (value.BuildingCategory) return value.BuildingCategory
+            if (value.buildingCategory) return value.buildingCategory
+            return null
+        }
+        
         // 如果value是对象（JSON字符串或对象），可能需要进一步处理，这里假设是字符串
         if (typeof value === 'string') {
            if (value.includes('教学楼')) return '教学楼'
            if (value.includes('宿舍楼')) return '宿舍楼'
            if (value.includes('办公楼')) return '办公楼'
-        } else if (typeof value === 'object' && value !== null) {
-            // 尝试从对象中提取
-            if (value.useFunction) return value.useFunction
-            if (value.buildingCategory) return value.buildingCategory
         }
         return value
       }
@@ -84,11 +89,20 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     // 结构信息映射
     structureType: {
       sources: ['主要建筑材料.Materials', 'Scale.StructureSystem', 'Structure.StructureType', 'KeyStructuralRequirements', 'StructureType', 'structureType'],
-      processor: (value: string) => mapToSelectValue(String(value), structureType, ['框架结构', '剪力墙结构', '框架-剪力墙结构', '钢结构', '砌体结构'])
+      processor: (value: any) => {
+        if (typeof value === 'object' && value !== null) return null
+        return mapToSelectValue(String(value), structureType, ['框架结构', '剪力墙结构', '框架-剪力墙结构', '钢结构', '砌体结构'])
+      }
     },
     floors: {
       sources: ['建筑规模与形态', 'Scale.Floors', 'Scale', 'Floors', 'floors'],
       processor: (value: any) => {
+        if (typeof value === 'object' && value !== null) {
+          if (value.Floors) value = value.Floors
+          else if (value.floors) value = value.floors
+          else return null
+        }
+
         // Ensure value is a string before processing
         value = String(value)
         if (value.includes('5层及以下')) return '5层及以下'
@@ -99,6 +113,11 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     buildingHeight: {
       sources: ['建筑规模与形态', 'Scale.BuildingHeight', 'BuildingHeight', 'buildingHeight'],
       processor: (value: any) => {
+        if (typeof value === 'object' && value !== null) {
+           if (value.BuildingHeight) value = value.BuildingHeight
+           else if (value.buildingHeight) value = value.buildingHeight
+           else return null
+        }
         value = String(value)
         if (value.includes('多层')) return '多层建筑'
         if (value === '多层公共建筑') return '多层建筑'
@@ -110,6 +129,11 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     structureDesignLife: {
       sources: ['安全等级.LifeLimit', 'LifeLimit', 'SafetyLevel.LifeLimit', 'lifeLimit'],
       processor: (value: any) => {
+        if (typeof value === 'object' && value !== null) {
+          if (value.LifeLimit) value = value.LifeLimit
+          else if (value.lifeLimit) value = value.lifeLimit
+          else return null
+        }
         value = String(value)
         const match = value.match(/(\d+)年/)
         return match ? match[1] : null
@@ -120,6 +144,7 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     fireResistanceGrade: {
       sources: ['防火设计.FirePorcationClass', 'FireProtecionDesign.FirePorcationClass', 'fireProtecionDesign.firePorcationClass'],
       processor: (value: any) => {
+        if (typeof value === 'object' && value !== null) return null
         value = String(value)
         const gradeMap: { [key: string]: string } = {
           '一级': '1', '二级': '2', '三级': '3', '四级': '4',
@@ -131,6 +156,11 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     fireCategory: {
       sources: ['建筑规模与形态', 'Scale.BuildingHeight', 'Scale', 'BuildingHeight', 'buildingHeight'],
       processor: (value: any) => {
+        if (typeof value === 'object' && value !== null) {
+          if (value.BuildingHeight) value = value.BuildingHeight
+          else if (value.buildingHeight) value = value.buildingHeight
+          else return null
+        }
         value = String(value)
         if (value.includes('多层')) {
           return 'multi_story_public'
@@ -193,11 +223,55 @@ export const processRecognitionResult = (data: any, projectForm:any) => {
     },
     energyEfficiencyRequirement: {
       sources: ['节能设计', 'EnergySavingDesign', 'energySavingDesign'],
-      processor: (value: string) => value
+      processor: (value: any) => {
+        if (typeof value === 'string') return value
+        if (value && typeof value === 'object') {
+          // 优先提取 referenceStandards
+          if (Array.isArray(value.referenceStandards)) {
+            return value.referenceStandards.join('; ')
+          }
+          // 尝试提取其他可能包含信息的字段
+          const parts: string[] = []
+          if (value.energySavingStandard) parts.push(value.energySavingStandard)
+          if (value.designStandard) parts.push(value.designStandard)
+          
+          if (parts.length > 0) return parts.join('; ')
+          
+          // 如果没有特定字段，尝试提取所有字符串或数组值
+          const values: string[] = []
+          Object.values(value).forEach(v => {
+             if (typeof v === 'string') values.push(v)
+             else if (Array.isArray(v)) values.push(v.join('; '))
+          })
+          if (values.length > 0) return values.join('; ')
+        }
+        return null
+      }
     },
     barrierFreeRequirement: {
       sources: ['无障碍设计', 'BarrierFreeDesign', 'barrierFreeDesign'],
-      processor: (value: string) => value
+      processor: (value: any) => {
+        if (typeof value === 'string') return value
+        if (value && typeof value === 'object') {
+          if (Array.isArray(value.referenceStandards)) {
+            return value.referenceStandards.join('; ')
+          }
+           // 尝试提取其他可能包含信息的字段
+          const parts: string[] = []
+          if (value.barrierFreeStandard) parts.push(value.barrierFreeStandard)
+          
+          if (parts.length > 0) return parts.join('; ')
+
+          // 如果没有特定字段，尝试提取所有字符串或数组值
+          const values: string[] = []
+          Object.values(value).forEach(v => {
+             if (typeof v === 'string') values.push(v)
+             else if (Array.isArray(v)) values.push(v.join('; '))
+          })
+          if (values.length > 0) return values.join('; ')
+        }
+        return null
+      }
     }
   }
   
@@ -319,7 +393,9 @@ export const resetProjectForm = ()=>{
     waterproofGrade: '',
     roofWaterproofLife: '',
     energyEfficiencyRequirement: '',
-    barrierFreeRequirement: ''
+    barrierFreeRequirement: '',
+    professionTagId: undefined,
+    businessTypeTagId: undefined
   }
 }
 

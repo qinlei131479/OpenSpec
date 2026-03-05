@@ -11,6 +11,7 @@
 -- 使用 ON CONFLICT DO NOTHING 确保幂等性
 
 -- 专业标签
+-- 使用部分唯一索引 uk_template_tags_system_null_user 处理 user_id IS NULL 的冲突
 INSERT INTO template_tags (name, category, is_system, sort_order, user_id) VALUES
 ('建筑', 'profession', TRUE, 1, NULL),
 ('结构', 'profession', TRUE, 2, NULL),
@@ -20,7 +21,7 @@ INSERT INTO template_tags (name, category, is_system, sort_order, user_id) VALUE
 ('弱电', 'profession', TRUE, 6, NULL),
 ('景观', 'profession', TRUE, 7, NULL),
 ('室内', 'profession', TRUE, 8, NULL)
-ON CONFLICT (name, category, user_id) DO NOTHING;
+ON CONFLICT (name, category) WHERE user_id IS NULL DO NOTHING;
 
 -- 业态标签
 INSERT INTO template_tags (name, category, is_system, sort_order, user_id) VALUES
@@ -32,7 +33,7 @@ INSERT INTO template_tags (name, category, is_system, sort_order, user_id) VALUE
 ('商业综合体', 'business_type', TRUE, 6, NULL),
 ('酒店', 'business_type', TRUE, 7, NULL),
 ('体育场馆', 'business_type', TRUE, 8, NULL)
-ON CONFLICT (name, category, user_id) DO NOTHING;
+ON CONFLICT (name, category) WHERE user_id IS NULL DO NOTHING;
 
 -- 完成提示
 DO $$

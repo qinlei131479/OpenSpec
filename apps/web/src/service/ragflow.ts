@@ -127,10 +127,29 @@ export async function generateParagraphBatch(
   payload: GenerateParagraphRequest,
 ): Promise<RagflowResponse> {
   try {
-    // 构建请求消息：结合章节名称和查询内容
-    const message = payload.chapterName
-      ? `请为章节"${payload.chapterName}"${payload.query || '生成内容'}`
-      : payload.query || '生成章节';
+    // 构建请求消息：与 ChatAssistant.vue 的 buildGenerationPrompt 对齐，确保标题层级和编号一致
+    const chapterMatch = payload.chapterName?.match(/^(\d+)\.(.+)$/);
+    const chapterNumber = chapterMatch ? chapterMatch[1] : '';
+    const chapterTitle = chapterMatch ? chapterMatch[2] : (payload.chapterName || '');
+
+    let message: string;
+    if (chapterTitle) {
+      const parts: string[] = [];
+      parts.push(`请根据以下信息生成《${chapterTitle}》章节的施工图设计说明。`);
+      // 保留子章节结构信息
+      if (payload.query) {
+        parts.push(`\n${payload.query}`);
+      }
+      // 明确指定章节编号和标题层级
+      if (chapterNumber) {
+        parts.push(`\n【输出格式】\n请使用 Markdown 格式输出，章节大标题使用一级标题格式"# ${chapterNumber}. ${chapterTitle}"，符合国家建筑规范标准。`);
+      } else {
+        parts.push('\n【输出格式】\n请使用 Markdown 格式输出，符合国家建筑规范标准。');
+      }
+      message = parts.join('\n');
+    } else {
+      message = payload.query || '生成章节';
+    }
 
     // 构建项目信息（包含模板参数）
     let projectInfo = `文档名称: ${payload.title || ''}`;

@@ -11,7 +11,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from dotenv import load_dotenv
 import logging
 
@@ -25,6 +25,7 @@ from service.workflow.construction_agent import (
 from service.workflow.batch_construction_agent import generate_chapter_batch
 from service.tools.construction_tools import set_request_kb_ids, clear_request_kb_ids
 from service.tools.kb_resolver import resolve as resolve_kb
+from service.memory.memory_service import save_memory, recall_memories
 # from service.db.database import get_kb_id_by_project_id
 
 # Langfuse integration
@@ -128,6 +129,10 @@ class WorkflowChatRequest(BaseModel):
     chapter_name: Optional[str] = None  # 当前生成的章节名称
     resume_session: Optional[bool] = True  # 是否恢复历史 Session（默认 True）
 
+    
+    # 补充要求（用于记忆保存）
+    additional_requirements: Optional[str] = None  # 用户输入的补充要求，直接保存为记忆
+
     # 记忆区间控制
     memory_window: Optional[int] = None  # 保留最近 N 轮对话（None=全部，0=不保留）
     memory_chapters: Optional[List[str]] = None  # 指定保留的章节名称列表
@@ -157,133 +162,6 @@ def generate_thread_id(user_id: str, document_id: str) -> str:
         return f"user_{user_id}_temp"
     return document_id
 
-
-def filter_memory_by_window(messages: list, memory_window: Optional[int] = None) -> list:
-    """
-    根据对话轮数过滤历史消息
-    
-    Args:
-        messages: 原始消息列表
-        memory_window: 保留最近 N 轮对话（None=全部，0=清空）
-    
-    Returns:
-        过滤后的消息列表
-    """
-    if memory_window is None:
-        return messages
-    
-    if memory_window == 0:
-        return []
-    
-    # 计算对话轮数（一轮 = HumanMessage + AIMessage + 可能的 ToolMessage）
-    rounds = []
-    current_round = []
-    
-    for msg in messages:
-        if isinstance(msg, SystemMessage):
-            continue  # 跳过系统消息
-            
-        if isinstance(msg, HumanMessage) and current_round:
-            # 新的一轮开始
-            rounds.append(current_round)
-            current_round = [msg]
-        else:
-            current_round.append(msg)
-    
-    if current_round:
-        rounds.append(current_round)
-    
-    # 保留最近 N 轮
-    kept_rounds = rounds[-memory_window:] if len(rounds) > memory_window else rounds
-    
-    # 展平消息列表
-    filtered_messages = []
-    for round_msgs in kept_rounds:
-        filtered_messages.extend(round_msgs)
-    
-    logger.info(f"[Memory Filter] Kept {len(kept_rounds)}/{len(rounds)} rounds, {len(filtered_messages)}/{len(messages)} messages")
-    return filtered_messages
-
-
-def filter_memory_by_chapters(messages: list, chapter_names: Optional[List[str]] = None, 
-                              current_chapter: Optional[str] = None) -> list:
-    """
-    根据章节名称过滤历史消息
-    
-    Args:
-        messages: 原始消息列表
-        chapter_names: 要保留的章节名称列表
-        current_chapter: 当前章节名称（自动保留）
-    
-    Returns:
-        过滤后的消息列表
-    """
-    if not chapter_names and not current_chapter:
-        return messages
-    
-    # 构建章节关键词集合
-    keep_chapters = set(chapter_names or [])
-    if current_chapter:
-        keep_chapters.add(current_chapter)
-    
-    filtered_messages = []
-    
-    for msg in messages:
-        if isinstance(msg, SystemMessage):
-            filtered_messages.append(msg)  # 保留系统消息
-            continue
-        
-        # 检查消息内容是否包含目标章节
-        content = ""
-        if isinstance(msg, HumanMessage):
-            content = msg.content
-        elif isinstance(msg, AIMessage):
-            content = msg.content
-        elif isinstance(msg, ToolMessage):
-            content = str(msg.content)
-        
-        # 如果消息提到任何目标章节，则保留
-        if any(chapter in content for chapter in keep_chapters):
-            filtered_messages.append(msg)
-    
-    logger.info(f"[Memory Filter] Kept {len(filtered_messages)}/{len(messages)} messages for chapters: {keep_chapters}")
-    return filtered_messages
-
-
-def apply_memory_filters(messages: list, 
-                        memory_window: Optional[int] = None,
-                        memory_chapters: Optional[List[str]] = None,
-                        current_chapter: Optional[str] = None) -> list:
-    """
-    应用记忆过滤策略
-    
-    优先级：
-    1. memory_chapters（章节过滤）优先级最高
-    2. memory_window（轮数过滤）次之
-    3. 如果都不设置，保留全部历史
-    
-    Args:
-        messages: 原始消息列表
-        memory_window: 保留最近 N 轮对话
-        memory_chapters: 保留指定章节的对话
-        current_chapter: 当前章节名称
-    
-    Returns:
-        过滤后的消息列表
-    """
-    if not messages:
-        return []
-    
-    # 策略1: 章节过滤（优先级最高）
-    if memory_chapters:
-        return filter_memory_by_chapters(messages, memory_chapters, current_chapter)
-    
-    # 策略2: 轮数过滤
-    if memory_window is not None:
-        return filter_memory_by_window(messages, memory_window)
-    
-    # 策略3: 保留全部
-    return messages
 
 
 def _sse(event_type: str, payload: dict) -> str:
@@ -426,6 +304,43 @@ def _parse_auditor_result(content: str) -> dict:
     }
 
 
+def _save_requirement_memory(user_id: str, additional_requirements: str = None, chapter_name: str = None):
+    """将用户的补充要求直接保存为记忆"""
+    if not additional_requirements or not user_id or user_id == "default_user":
+        return
+    content = additional_requirements.strip()
+    if content:
+        save_memory(
+            user_id=user_id,
+            content=content,
+            chapter_name=chapter_name,
+            source_type="requirement",
+        )
+
+
+def _inject_recalled_memories(
+    user_id: str, project_info: str, chapter_name: str = None,
+    chapter_names: list = None, days_limit: int = None,
+) -> tuple[str, list]:
+    """召回相关记忆并注入到 project_info 中，同时返回召回的记忆列表"""
+    if not user_id or user_id == "default_user":
+        return project_info, []
+
+    # 用章节名称作为查询文本召回记忆
+    query = chapter_name or "建筑设计"
+    memories = recall_memories(
+        user_id, query, limit=5,
+        chapter_names=chapter_names, days_limit=days_limit,
+    )
+    if not memories:
+        return project_info, []
+
+    memory_lines = [f"- {m['content']}" for m in memories]
+    memory_block = "\n【历史偏好记忆】:\n" + "\n".join(memory_lines)
+    logger.info(f"[Memory] Injected {len(memories)} memories for user {user_id}, chapter={chapter_name}")
+    return project_info + memory_block, memories
+
+
 def import_time():
     """获取当前时间戳（毫秒）"""
     return int(time() * 1000)
@@ -478,6 +393,9 @@ async def event_generator(inputs, config=None):
     # 如果未启用审核，generate 流式输出
     user_visible_nodes = {"general_agent"}  # general_agent 始终流式输出
 
+    # 跟踪 generate 节点是否已发送过 token（用于 on_chain_end 补救）
+    generate_tokens_emitted = False
+
     # 跟踪 auditor 节点的执行次数
     auditor_execution_count = 0
 
@@ -515,25 +433,32 @@ async def event_generator(inputs, config=None):
             data = event["data"]
             run_id = event["run_id"]
 
+            # 调试日志：记录所有事件
+            if name in timeline_titles:
+                logger.info(f"[Event] {kind} - {name} - run_id={run_id}")
+
             # --- 场景 1: LLM 流式输出 (Streaming Tokens) ---
             if kind == "on_chat_model_stream":
                 chunk = data.get("chunk")
                 if chunk and chunk.content:
-                    streamed_run_ids.add(run_id)
                     # 获取当前节点名称
                     metadata = event.get("metadata", {})
                     node_name = metadata.get("langgraph_node", "")
+                    logger.info(f"[on_chat_model_stream] node={node_name}, content_length={len(chunk.content)}")
 
                     # 检查是否为思考过程
                     tags = event.get("tags", [])
                     is_thought = "thinking_trace" in tags
 
-                    # 收集思考内容，但不直接流式输出
+                    # 收集思考内容
                     if is_thought:
                         step_id = active_step_by_node.get(node_name)
                         if step_id:
                             thought_by_step_id[step_id] = thought_by_step_id.get(step_id, "") + chunk.content
-                        continue
+                        # 对于 generate 节点：思考内容就是文档内容，不跳过，继续执行下方的 token 发送逻辑
+                        # 对于其他节点：跳过 token 发送，只收集思考内容
+                        if node_name != "generate":
+                            continue
 
                     # 动态判断 generate 节点是否应该流式输出
                     should_stream_generate = False
@@ -541,7 +466,7 @@ async def event_generator(inputs, config=None):
                         # 策略：
                         # 1. 未开启审核：流式输出 generate
                         # 2. 开启审核但已达到最大循环次数：流式输出 generate（最后一次）
-                        # 3. 开启审核且未达到最大循环次数：不流式输出 generate
+                        # 3. 开启审核且未达到最大循环次数：不流式输出 generate（等待审核后输出）
                         if not enable_audit:
                             should_stream_generate = True
                         elif auditor_execution_count >= MAX_AUDIT_LOOPS:
@@ -554,6 +479,10 @@ async def event_generator(inputs, config=None):
 
                     # 只流式输出用户可见节点的内容
                     if node_name in user_visible_nodes or should_stream_generate:
+                        streamed_run_ids.add(run_id)  # 只有在实际发送后才标记为已流式
+                        if node_name == "generate":
+                            generate_tokens_emitted = True
+                        logger.debug(f"[on_chat_model_stream] Sending token for {node_name}")
                         yield _sse(
                             "token",
                             {
@@ -565,11 +494,13 @@ async def event_generator(inputs, config=None):
 
             # --- 场景 2: 非流式 LLM 输出补救 (Non-Streaming Output) ---
             elif kind == "on_chat_model_end":
+                logger.info(f"[on_chat_model_end] run_id={run_id}, streamed={run_id in streamed_run_ids}")
                 if run_id not in streamed_run_ids:
                     output = data.get("output")
                     if output and hasattr(output, "content") and output.content:
                         metadata = event.get("metadata", {})
                         node_name = metadata.get("langgraph_node", "")
+                        logger.info(f"[on_chat_model_end] node_name={node_name}, content_length={len(output.content)}")
 
                         if node_name == "router":
                             continue
@@ -581,19 +512,21 @@ async def event_generator(inputs, config=None):
                             step_id = active_step_by_node.get(node_name)
                             if step_id:
                                 thought_by_step_id[step_id] = thought_by_step_id.get(step_id, "") + output.content
-                            continue
+                            # 对于 generate 节点：思考内容就是文档内容，不跳过
+                            if node_name != "generate":
+                                continue
 
-                        # 动态判断 generate 节点是否应该流式输出（与上面逻辑一致）
-                        should_stream_generate = False
+                        # 对于 generate 节点，总是在结束时输出内容（补救机制）
+                        # 因为 generate 节点使用同步 invoke，不会产生 on_chat_model_stream 事件
                         if node_name == "generate":
-                            if not enable_audit:
-                                should_stream_generate = True
-                            elif auditor_execution_count >= MAX_AUDIT_LOOPS:
-                                should_stream_generate = True
-                            else:
-                                should_stream_generate = False
-
-                        if node_name in user_visible_nodes or should_stream_generate:
+                            generate_tokens_emitted = True
+                            logger.info(f"[on_chat_model_end] Sending token for generate node, content_length={len(output.content)}")
+                            yield _sse("token", {
+                                "content": output.content,
+                                "node": node_name,
+                                "timestamp": import_time()
+                            })
+                        elif node_name in user_visible_nodes:
                             yield _sse("token", {
                                 "content": output.content,
                                 "node": node_name,
@@ -609,6 +542,10 @@ async def event_generator(inputs, config=None):
                 if name == "auditor":
                     auditor_execution_count += 1
                     logger.debug(f"[workflow_api] Auditor execution count: {auditor_execution_count}/{MAX_AUDIT_LOOPS}")
+
+                # 每次 generate 节点重新开始时，重置 token 发送标记
+                if name == "generate":
+                    generate_tokens_emitted = False
 
                 step_start_times[run_id] = import_time()
                 
@@ -628,6 +565,19 @@ async def event_generator(inputs, config=None):
                     continue
 
                 thought = _extract_user_facing_thought(thought_by_step_id.get(run_id, ""))
+
+                # 补救机制：generate 节点结束时，如果没有发送过任何 token，
+                # 说明所有内容都在思考链中，需要将原始思考内容作为 token 发送
+                if name == "generate" and not generate_tokens_emitted:
+                    raw_thought = thought_by_step_id.get(run_id, "")
+                    if raw_thought:
+                        logger.info(f"[on_chain_end] Generate node fallback: emitting raw thought as token, length={len(raw_thought)}")
+                        yield _sse("token", {
+                            "content": raw_thought,
+                            "node": "generate",
+                            "timestamp": import_time()
+                        })
+                        generate_tokens_emitted = True
                 
                 # 计算耗时
                 start_time = step_start_times.get(run_id)
@@ -777,18 +727,24 @@ class WorkflowBatchRequest(BaseModel):
     document_id: Optional[str] = None  # 文档 ID（用作 thread_id/session_id）
     chapter_name: Optional[str] = None  # 当前生成的章节名称
 
+    # 补充要求（用于记忆保存）
+    additional_requirements: Optional[str] = None  # 用户输入的补充要求，直接保存为记忆
+
     # 标签字段：用于动态知识库选择
     profession_tag_id: Optional[int] = None  # 专业标签 ID
     business_type_tag_id: Optional[int] = None  # 业态标签 ID
 
 
 @workflow_router.post("/chat/batch")
-async def workflow_chat_batch(request: WorkflowBatchRequest):
+async def workflow_chat_batch(request: WorkflowBatchRequest, http_request: Request):
     """
     批量生成接口（非流式）
     不显示执行过程，直接返回生成结果
     """
-    logger.info(f"[workflow_chat_batch] 请求收到: message={request.message[:50]}..., user_id={request.user_id}, document_id={request.document_id}, project_id={request.project_id}")
+    # 优先使用 JWT 中的 user_id（与 memory list API 一致），否则回退到请求体中的 user_id
+    jwt_user_id = getattr(http_request.state, "user_id", None)
+    memory_user_id = str(jwt_user_id) if jwt_user_id else request.user_id
+    logger.info(f"[workflow_chat_batch] 请求收到: message={request.message[:50]}..., user_id={request.user_id}, jwt_user_id={jwt_user_id}, document_id={request.document_id}, project_id={request.project_id}")
 
     if not request.message:
         return {"success": False, "error": "Message is required"}
@@ -816,11 +772,23 @@ async def workflow_chat_batch(request: WorkflowBatchRequest):
             }
         )
 
+        # 记忆召回：将相关记忆注入到 project_info 中
+        enriched_project_info = request.project_info or ""
+        recalled_memories = []
+        try:
+            enriched_project_info, recalled_memories = _inject_recalled_memories(
+                user_id=memory_user_id,
+                project_info=enriched_project_info,
+                chapter_name=request.chapter_name,
+            )
+        except Exception as e:
+            logger.warning(f"Memory recall failed (non-fatal): {e}")
+
         # 调用批量生成，传入 langfuse_handler、metadata 和 thread_id
         result = await generate_chapter_batch(
             message=request.message,
             template=request.template or "",
-            project_info=request.project_info or "",
+            project_info=enriched_project_info,
             project_id=request.project_id or "",
             user_id=request.user_id,
             langfuse_handler=langfuse_handler,
@@ -836,17 +804,34 @@ async def workflow_chat_batch(request: WorkflowBatchRequest):
         except Exception as e:
             logger.warning(f"Failed to flush Langfuse data: {e}")
 
+        # 记忆写入：保存用户的补充要求
+        try:
+            _save_requirement_memory(
+                user_id=memory_user_id,
+                additional_requirements=request.additional_requirements,
+                chapter_name=request.chapter_name,
+            )
+        except Exception as e:
+            logger.warning(f"Memory save failed (non-fatal): {e}")
+
+        # 附加召回的记忆到结果中
+        if isinstance(result, dict):
+            result["recalled_memories"] = recalled_memories
+
         return result
     finally:
         clear_request_kb_ids()
 
 
 @workflow_router.post("/chat/stream")
-async def workflow_chat_stream(request: WorkflowChatRequest):
+async def workflow_chat_stream(request: WorkflowChatRequest, http_request: Request):
     """
     流式对话接口 - 支持记忆功能
     """
-    logger.info(f"[workflow_chat_stream] 请求收到: message={request.message[:50]}..., user_id={request.user_id}, document_id={request.document_id}")
+    # 优先使用 JWT 中的 user_id（与 memory list API 一致），否则回退到请求体中的 user_id
+    jwt_user_id = getattr(http_request.state, "user_id", None)
+    memory_user_id = str(jwt_user_id) if jwt_user_id else request.user_id
+    logger.info(f"[workflow_chat_stream] 请求收到: message={request.message[:50]}..., user_id={request.user_id}, jwt_user_id={jwt_user_id}, document_id={request.document_id}")
 
     if not request.message:
         return {"error": "Message is required"}
@@ -877,41 +862,9 @@ async def workflow_chat_stream(request: WorkflowChatRequest):
         "tags": ["construction_agent", "document_generation"]
     }
 
-    # 4. 处理记忆区间过滤
-    # 注意：当前 checkpointer 被禁用，历史消息通过内存管理
-    # 当 PostgreSQL checkpointer 启用后，可以通过 get_state() 获取历史
-    if not request.resume_session:
-        logger.info(f"[workflow_chat_stream] Clearing session history for thread_id: {thread_id}")
-        # 当 checkpointer 启用后，可以调用:
-        # from service.workflow.construction_agent import checkpointer
-        # if checkpointer:
-        #     checkpointer.delete(config)
-    else:
-        # 应用记忆过滤策略
-        if request.memory_window is not None or request.memory_chapters:
-            logger.info(f"[workflow_chat_stream] Applying memory filters: window={request.memory_window}, chapters={request.memory_chapters}")
-            
-            # 当 checkpointer 启用后，可以获取并过滤历史消息:
-            # from service.workflow.construction_agent import app as agent_app
-            # try:
-            #     state = agent_app.get_state(config)
-            #     if state and state.values.get("messages"):
-            #         original_messages = state.values["messages"]
-            #         filtered_messages = apply_memory_filters(
-            #             original_messages,
-            #             memory_window=request.memory_window,
-            #             memory_chapters=request.memory_chapters,
-            #             current_chapter=request.chapter_name
-            #         )
-            #         # 更新状态
-            #         agent_app.update_state(config, {"messages": filtered_messages})
-            #         logger.info(f"[workflow_chat_stream] Filtered messages: {len(original_messages)} -> {len(filtered_messages)}")
-            # except Exception as e:
-            #     logger.warning(f"[workflow_chat_stream] Failed to filter memory: {e}")
-            
-            # 当前 checkpointer 禁用，记录警告
-            logger.warning("[workflow_chat_stream] Memory filtering requires PostgreSQL checkpointer (currently disabled)")
-            logger.warning("[workflow_chat_stream] Memory filters will take effect once checkpointer is enabled")
+    # 4. 记忆过滤参数：memory_window 重定义为天数限制，memory_chapters 为章节过滤
+    days_limit = request.memory_window  # 重定义：天数限制（而非对话轮数）
+    chapter_filter = request.memory_chapters
 
     # 准备输入参数
     # 章节模板：后续需从模板中获取 template_id + chapter_name
@@ -919,6 +872,19 @@ async def workflow_chat_stream(request: WorkflowChatRequest):
 
     # 项目信息： 从请求中获取，或使用默认值
     project_info = request.project_info or ""
+
+    # 记忆召回：将相关记忆注入到 project_info 中，并获取召回列表
+    recalled_memories = []
+    try:
+        project_info, recalled_memories = _inject_recalled_memories(
+            user_id=memory_user_id,
+            project_info=project_info,
+            chapter_name=request.chapter_name,
+            chapter_names=chapter_filter,
+            days_limit=days_limit,
+        )
+    except Exception as e:
+        logger.warning(f"Memory recall failed (non-fatal): {e}")
 
     # 根据标签解析知识库 ID 并设置到请求级 context
     kb_config = resolve_kb(request.profession_tag_id, request.business_type_tag_id)
@@ -943,16 +909,31 @@ async def workflow_chat_stream(request: WorkflowChatRequest):
 
     logger.info("[workflow_chat_stream] 开始流式响应")
 
-    async def stream_with_kb_cleanup():
-        """包装 event_generator，确保流结束后清理请求级知识库"""
+    async def stream_with_memory():
+        """包装 event_generator，在流开始前发送记忆召回事件，结束后保存记忆并清理请求级知识库"""
         try:
+            # 发送召回的记忆事件
+            if recalled_memories:
+                yield _sse("memory_recalled", {"memories": recalled_memories})
+
+            # 主事件流
             async for chunk in event_generator(inputs, config):
                 yield chunk
+
+            # 流结束后保存记忆
+            try:
+                _save_requirement_memory(
+                    user_id=memory_user_id,
+                    additional_requirements=request.additional_requirements,
+                    chapter_name=request.chapter_name,
+                )
+            except Exception as e:
+                logger.warning(f"Memory save failed in stream (non-fatal): {e}")
         finally:
             clear_request_kb_ids()
 
     return StreamingResponse(
-        stream_with_kb_cleanup(),
+        stream_with_memory(),
         media_type="text/event-stream",
         headers={
             'Cache-Control': 'no-cache, no-store, must-revalidate',

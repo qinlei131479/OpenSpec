@@ -252,7 +252,8 @@ const generateDocument = async () => {
       createdAt: new Date().toISOString()
     }
     
-    localStorage.setItem('currentProject', JSON.stringify(documentData))
+    // 使用 sessionStorage 实现标签页隔离，支持多文档同时创建
+    sessionStorage.setItem('currentProject', JSON.stringify(documentData))
     
     ElNotification({
       title: '成功',

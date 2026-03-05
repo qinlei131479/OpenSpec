@@ -94,3 +94,37 @@ export async function getUserInfo(): Promise<ApiResponse<UserData>> {
   }
   return response.json();
 }
+
+/**
+ * 更新个人资料（昵称）
+ */
+export async function updateProfile(nickname: string): Promise<ApiResponse<UserData>> {
+  const response = await fetch(`${API_BASE_URL}/user/profile`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ nickname }),
+  });
+  if (response.status === 401) {
+    authStorage.clearAll();
+    redirectToLogin();
+    throw new Error('未授权，请重新登录');
+  }
+  return response.json();
+}
+
+/**
+ * 修改密码
+ */
+export async function changePassword(oldPassword: string, newPassword: string): Promise<ApiResponse<void>> {
+  const response = await fetch(`${API_BASE_URL}/user/password`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
+  if (response.status === 401) {
+    authStorage.clearAll();
+    redirectToLogin();
+    throw new Error('未授权，请重新登录');
+  }
+  return response.json();
+}

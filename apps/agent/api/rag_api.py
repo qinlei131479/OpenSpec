@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 import json
 from service.rag.rag_service_ragflow import RagflowService
+from service.memory.memory_service import save_memory
 from pydantic import BaseModel
 from typing import Optional, Union
 import logging
@@ -43,7 +44,7 @@ rag_router = APIRouter(prefix="/agent")
 logger.debug(f"RAG API module loaded: {__name__}")
 
 @rag_router.post('/generate_paragraph_stream')
-async def ragflow_generate_with_assistant(request: AiDocRequestSingle):
+async def ragflow_generate_with_assistant(request: AiDocRequestSingle, http_request: Request):
     """
     流式生成段落内容
     """
@@ -56,7 +57,21 @@ async def ragflow_generate_with_assistant(request: AiDocRequestSingle):
         if not request.name:
             logger.error("ragflow_generate_paragraph_stream: name is required but was not provided.")
             return {"code": 400, "message": "name is required"}
-        
+
+        # 记忆写入：保存补充要求
+        user_id = getattr(http_request.state, "user_id", None)
+        req_text = (request.requirement or "").strip()
+        if user_id and req_text:
+            try:
+                save_memory(
+                    user_id=str(user_id),
+                    content=req_text,
+                    chapter_name=request.chapterName,
+                    source_type="requirement",
+                )
+            except Exception as e:
+                logger.warning(f"Memory save failed (non-fatal): {e}")
+
         ragflow_service = RagflowService()
         
         async def generate_paragraph_response(request):

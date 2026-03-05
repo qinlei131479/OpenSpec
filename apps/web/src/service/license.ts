@@ -35,6 +35,7 @@ export interface LicenseStatus {
   issueDate?: string
   features: {
     templateManagement: boolean
+    memoryManagement: boolean
     [key: string]: boolean
   }
 }
@@ -67,7 +68,8 @@ export async function getLicenseStatus(forceRefresh = false): Promise<LicenseSta
       return {
         valid: false,
         features: {
-          templateManagement: false
+          templateManagement: false,
+          memoryManagement: false
         }
       }
     }
@@ -85,7 +87,8 @@ export async function getLicenseStatus(forceRefresh = false): Promise<LicenseSta
     return {
       valid: false,
       features: {
-        templateManagement: false
+        templateManagement: false,
+        memoryManagement: false
       }
     }
   }
@@ -97,6 +100,14 @@ export async function getLicenseStatus(forceRefresh = false): Promise<LicenseSta
 export async function hasTemplateManagementLicense(): Promise<boolean> {
   const status = await getLicenseStatus()
   return status.features.templateManagement
+}
+
+/**
+ * 检查是否有记忆管理功能授权
+ */
+export async function hasMemoryManagementLicense(): Promise<boolean> {
+  const status = await getLicenseStatus()
+  return status.features.memoryManagement
 }
 
 /**

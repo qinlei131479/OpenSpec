@@ -6,11 +6,6 @@
         <div class="header-left">
           <HeaderLogo />
           <nav class="nav-menu">
-            <router-link class="nav-item" to="/settings">
-              <el-icon><ArrowLeft /></el-icon>
-              返回设置
-            </router-link>
-            <span class="nav-separator">/</span>
             <span class="nav-item active">{{ templateInfo?.name || '模板详情' }}</span>
           </nav>
         </div>
@@ -132,10 +127,9 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { 
-  ArrowLeft, 
-  Clock, 
-  Loading 
+import {
+  Clock,
+  Loading
 } from '@element-plus/icons-vue'
 import { authStorage, authFetch } from '../utils/auth'
 import HeaderLogo from '../components/HeaderLogo.vue'
@@ -244,18 +238,127 @@ const loadTemplateDetail = async () => {
   }
 }
 
+// ========== 内容解析辅助函数 ==========
+
+// 在合并文本中定位章节标题所在行的起始位置
+const findTitleInContent = (content: string, title: string, startFrom: number = 0): number => {
+  const searchArea = content.substring(startFrom)
+  // 去掉标题中可能带有的 markdown 前缀
+  const cleanTitle = title.replace(/^#{1,6}\s+/, '').trim()
+
+  // 策略1：直接搜索标题文字
+  let pos = searchArea.indexOf(cleanTitle)
+  if (pos >= 0) {
+    pos += startFrom
+    const lineStart = content.lastIndexOf('\n', pos - 1)
+    return lineStart >= 0 ? lineStart + 1 : 0
+  }
+
+  // 策略2：去掉编号前缀后搜索描述文字
+  const textPart = cleanTitle
+    .replace(/^(?:二十|十[一二三四五六七八九]?|[一二三四五六七八九])[、.．]\s*/, '')
+    .replace(/^\d+(?:\.\d+)*[\.、\s]+/, '')
+    .trim()
+
+  if (textPart.length >= 3) {
+    pos = searchArea.indexOf(textPart)
+    if (pos >= 0) {
+      pos += startFrom
+      const lineStart = content.lastIndexOf('\n', pos - 1)
+      return lineStart >= 0 ? lineStart + 1 : 0
+    }
+  }
+
+  return -1
+}
+
+// 去掉第一行（标题行），避免与 h2 标题重复
+const stripFirstLine = (text: string): string => {
+  const idx = text.indexOf('\n')
+  return idx >= 0 ? text.substring(idx + 1).trim() : ''
+}
+
+// 从内容中自动检测章节标题
+const detectHeadingsFromContent = (content: string): Array<{
+  id: string; title: string; level: number; position: number
+}> => {
+  const headings: Array<{id: string; title: string; level: number; position: number}> = []
+  const lines = content.split('\n')
+  let pos = 0
+  let idx = 0
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed) {
+      let matched = false
+
+      // Markdown heading（排除 "## Chunk N" 人工标记）
+      const mdMatch = trimmed.match(/^(#{1,3})\s+(.+)$/)
+      if (mdMatch && !/^#{1,6}\s+Chunk \d+$/.test(trimmed)) {
+        headings.push({
+          id: `heading-${idx++}`,
+          title: mdMatch[2].trim(),
+          level: Math.min(mdMatch[1].length, 3),
+          position: pos
+        })
+        matched = true
+      }
+
+      // 中文数字标题: 一、xxx
+      if (!matched && /^(?:二十|十[一二三四五六七八九]?|[一二三四五六七八九])[、.．]\s*.+/.test(trimmed)) {
+        headings.push({
+          id: `heading-${idx++}`,
+          title: trimmed,
+          level: 1,
+          position: pos
+        })
+      }
+    }
+    pos += line.length + 1
+  }
+
+  return headings
+}
+
+// 从 chunk 内容中提取更好的标题
+const extractChunkTitle = (chunk: any, index: number): string => {
+  const content = chunk.content || ''
+  const lines = content.split('\n')
+
+  for (let i = 0; i < Math.min(lines.length, 3); i++) {
+    const trimmed = lines[i].trim()
+    if (!trimmed) continue
+
+    // Markdown heading
+    const mdMatch = trimmed.match(/^#{1,6}\s+(.+)$/)
+    if (mdMatch && !/Chunk \d+/.test(trimmed)) return mdMatch[1].trim()
+
+    // 中文数字标题
+    if (/^(?:二十|十[一二三四五六七八九]?|[一二三四五六七八九])[、.．]\s*.+/.test(trimmed)) {
+      return trimmed
+    }
+
+    // 阿拉伯数字标题
+    const numMatch = trimmed.match(/^(\d+(?:\.\d+)*)[\.、\s]\s*(.+)$/)
+    if (numMatch && numMatch[2].length > 1) return trimmed
+  }
+
+  if (chunk.important_keywords && chunk.important_keywords.length > 0) {
+    return chunk.important_keywords[0]
+  }
+
+  return `章节 ${index + 1}`
+}
+
+// ========== 加载与解析 ==========
+
 // 从agent服务加载内容（降级方案）
 const loadFromAgent = async (fileId: string) => {
   try {
     const chunksResponse = await authFetch('/agent/file/get_chunks', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fileId: fileId,
-        datasetName: 'personal-template'
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId, datasetName: 'personal-template' })
     })
 
     if (!chunksResponse.ok) {
@@ -266,30 +369,79 @@ const loadFromAgent = async (fileId: string) => {
     console.log('从agent获取的chunks:', chunksResult)
 
     if (chunksResult.code === 200 && chunksResult.data && Array.isArray(chunksResult.data)) {
-      // 直接从chunks构建目录和章节，不经过parseChunksContent的正则匹配
       const chunks = chunksResult.data
-      const catalogList: CatalogItem[] = []
-      const sectionList: Section[] = []
+      if (chunks.length === 0) return
 
-      chunks.forEach((chunk: any, index: number) => {
-        const id = `chunk-${index}`
-        const title = (chunk.important_keywords && chunk.important_keywords.length > 0)
-          ? chunk.important_keywords[0]
-          : `章节 ${index + 1}`
+      // 合并所有 chunk 内容
+      const mergedContent = chunks.map((c: any) => c.content || '').join('\n')
 
-        catalogList.push({ id, title, level: 1 })
-        sectionList.push({
-          id,
-          title,
-          level: 1,
-          content: (chunk.content || '').replace(/\n/g, '<br>')
+      // 尝试从内容中检测章节标题
+      const headings = detectHeadingsFromContent(mergedContent)
+      const mainHeadings = headings.filter(h => h.level === 1)
+
+      if (mainHeadings.length > 0) {
+        // 检测到标题 → 按章节构建目录和内容
+        const catalogList: CatalogItem[] = []
+        const sectionList: Section[] = []
+
+        headings.forEach(h => {
+          catalogList.push({ id: h.id, title: h.title, level: h.level })
         })
-      })
 
-      catalog.value = catalogList
-      sections.value = sectionList
-      if (catalogList.length > 0) {
-        currentSection.value = catalogList[0].id
+        // 首个章节之前的内容
+        if (mainHeadings[0].position > 0) {
+          const pre = mergedContent.substring(0, mainHeadings[0].position).trim()
+          if (pre) {
+            catalogList.unshift({ id: 'section-preamble', title: '前言', level: 1 })
+            sectionList.push({
+              id: 'section-preamble',
+              title: '前言',
+              level: 1,
+              content: pre.replace(/\n/g, '<br>')
+            })
+          }
+        }
+
+        for (let i = 0; i < mainHeadings.length; i++) {
+          const h = mainHeadings[i]
+          const endPos = i + 1 < mainHeadings.length ? mainHeadings[i + 1].position : mergedContent.length
+          const raw = mergedContent.substring(h.position, endPos).trim()
+          const body = stripFirstLine(raw)
+
+          sectionList.push({
+            id: h.id,
+            title: h.title,
+            level: h.level,
+            content: body.replace(/\n/g, '<br>')
+          })
+        }
+
+        catalog.value = catalogList
+        sections.value = sectionList
+      } else {
+        // 未检测到标题 → 降级为按 chunk 显示
+        const catalogList: CatalogItem[] = []
+        const sectionList: Section[] = []
+
+        chunks.forEach((chunk: any, index: number) => {
+          const id = `chunk-${index}`
+          const title = extractChunkTitle(chunk, index)
+
+          catalogList.push({ id, title, level: 1 })
+          sectionList.push({
+            id,
+            title,
+            level: 1,
+            content: (chunk.content || '').replace(/\n/g, '<br>')
+          })
+        })
+
+        catalog.value = catalogList
+        sections.value = sectionList
+      }
+
+      if (catalog.value.length > 0) {
+        currentSection.value = catalog.value[0].id
       }
     }
   } catch (error) {
@@ -343,12 +495,12 @@ const parseDocumentContent = (extracted: any) => {
   }
 }
 
-// 解析chunks内容（新的保存格式）
+// 解析chunks内容（数据库保存格式：content + chapters JSON）
 const parseChunksContent = (content: string, chaptersData: any[]) => {
   const catalogList: CatalogItem[] = []
   const sectionList: Section[] = []
 
-  // 首先，将chapters中的所有项都添加到目录中（保留完整的层级结构）
+  // 1. 从 chaptersData 构建左侧目录（保留完整层级）
   if (chaptersData && Array.isArray(chaptersData)) {
     chaptersData.forEach((chapter) => {
       catalogList.push({
@@ -359,63 +511,79 @@ const parseChunksContent = (content: string, chaptersData: any[]) => {
     })
   }
 
-  // 按分隔符切分chunk
+  // 2. 去掉保存时注入的 "## Chunk N" 标记，合并所有 chunk 为连续文本
   const chunkParts = content.split('\n---\n\n')
+  const cleanedParts = chunkParts.map(part => part.replace(/^## Chunk \d+\n/, ''))
+  const mergedContent = cleanedParts.join('\n')
 
-  // 从chapters中提取level=1的主章节
-  const mainChapters = chaptersData && Array.isArray(chaptersData)
-    ? chaptersData.filter(ch => ch.level === 1)
-    : []
+  // 3. 获取一级章节，用于将内容分割成 section
+  const mainChapters = (chaptersData || []).filter(ch => ch.level === 1)
 
-  // 为每个主章节收集其对应的chunks内容
-  // 根据content中的章节号（如"11"）来匹配，将多个chunks合并到同一主章节
-  const sectionContentMap = new Map<string, string[]>()
-
-  // 初始化：为每个主章节创建一个内容数组
-  mainChapters.forEach((chapter) => {
-    sectionContentMap.set(chapter.id, [])
-  })
-
-  // 遍历每个chunk，根据其中的主章节号来确定属于哪个主章节
-  chunkParts.forEach((chunkContent) => {
-    // 从chunk中提取主章节号（如"11"）
-    // 查找形如 "# X." 或 "## X.Y" 或 "11.7" 这样的模式
-    const mainChapterMatch = chunkContent.match(/(?:^|\n)#+\s+(\d+)[\.\s]/m)
-
-    if (mainChapterMatch) {
-      const chapterNumber = mainChapterMatch[1]
-
-      // 在mainChapters中找到对应的章节
-      const targetChapter = mainChapters.find(ch => {
-        // 提取chapter标题中的数字部分
-        const titleMatch = ch.title.match(/^(\d+)[\.\s]/)
-        return titleMatch && titleMatch[1] === chapterNumber
+  if (mainChapters.length === 0) {
+    // 没有一级章节 → 整段显示
+    if (mergedContent.trim()) {
+      sectionList.push({
+        id: 'section-all',
+        title: '全文内容',
+        level: 1,
+        content: mergedContent.trim().replace(/\n/g, '<br>')
       })
+    }
+  } else {
+    // 4. 在合并文本中按顺序定位每个一级章节的位置
+    const positions: Array<{ chapter: any; pos: number }> = []
+    let searchFrom = 0
 
-      // 将chunk内容添加到对应主章节
-      if (targetChapter) {
-        const contents = sectionContentMap.get(targetChapter.id) || []
-        contents.push(chunkContent)
-        sectionContentMap.set(targetChapter.id, contents)
+    for (const chapter of mainChapters) {
+      const pos = findTitleInContent(mergedContent, chapter.title, searchFrom)
+      if (pos >= 0) {
+        positions.push({ chapter, pos })
+        searchFrom = pos + 1
       }
     }
-  })
 
-  // 为每个主章节创建一个section，并合并其所有chunks
-  mainChapters.forEach((chapter) => {
-    const contents = sectionContentMap.get(chapter.id) || []
-
-    // 如果该主章节有对应的chunks，就使用合并后的内容
-    if (contents.length > 0) {
-      const mergedContent = contents.join('\n\n')
+    if (positions.length === 0) {
+      // 没有匹配到任何章节标题 → 整段显示
       sectionList.push({
-        id: chapter.id,
-        title: chapter.title,
-        level: chapter.level,
-        content: mergedContent.replace(/\n/g, '<br>')
+        id: 'section-all',
+        title: templateInfo.value?.name || '全文内容',
+        level: 1,
+        content: mergedContent.trim().replace(/\n/g, '<br>')
       })
+    } else {
+      // 5. 处理首个章节之前的内容（如有）
+      if (positions[0].pos > 0) {
+        const preContent = mergedContent.substring(0, positions[0].pos).trim()
+        if (preContent) {
+          const preId = 'section-preamble'
+          catalogList.unshift({ id: preId, title: '前言', level: 1 })
+          sectionList.push({
+            id: preId,
+            title: '前言',
+            level: 1,
+            content: preContent.replace(/\n/g, '<br>')
+          })
+        }
+      }
+
+      // 6. 按一级章节边界切分内容
+      for (let i = 0; i < positions.length; i++) {
+        const { chapter, pos } = positions[i]
+        const endPos = i + 1 < positions.length ? positions[i + 1].pos : mergedContent.length
+        const rawSection = mergedContent.substring(pos, endPos).trim()
+
+        // 去掉标题行，避免与 section h2 重复
+        const bodyContent = stripFirstLine(rawSection)
+
+        sectionList.push({
+          id: chapter.id,
+          title: chapter.title,
+          level: chapter.level,
+          content: bodyContent.replace(/\n/g, '<br>')
+        })
+      }
     }
-  })
+  }
 
   catalog.value = catalogList
   sections.value = sectionList

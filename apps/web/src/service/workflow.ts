@@ -12,6 +12,10 @@ export interface WorkflowChatRequest {
   user_id?: string
   document_id?: string  // 文档 ID，用作 session_id
   enable_audit?: boolean  // 是否启用校验
+  chapter_name?: string  // 当前生成的章节名称（用于记忆召回）
+  additional_requirements?: string  // 用户补充要求（用于记忆保存）
+  memory_window?: number  // 记忆天数限制（最近 N 天）
+  memory_chapters?: string[]  // 指定召回的章节名称列表
   // 标签字段：用于动态知识库选择
   profession_tag_id?: number  // 专业标签 ID
   business_type_tag_id?: number  // 业态标签 ID

@@ -90,9 +90,8 @@ export async function getAllTags(): Promise<ApiResponse<TemplateTag[]>> {
 
     if (!response.ok) {
       if (response.status === 401) {
-        authStorage.clearAll()
-        redirectToLogin()
-        throw new Error('未授权，请重新登录')
+        // 访客浏览时不强制跳转登录页，静默返回空数据
+        throw new Error('未授权')
       }
       throw new Error(`HTTP error! status: ${response.status}`)
     }

@@ -19,8 +19,10 @@ from api.rag_api import rag_router
 from api.file_api import file_router
 from api.workflow_api import workflow_router
 from api.template_api import template_router
+from api.memory_api import memory_router
 from middleware.jwt_auth import JwtAuthMiddleware
 from utils.logger import setup_logger
+from service.memory.memory_service import ensure_table as ensure_memory_table
 
 # 加载环境变量
 load_dotenv()
@@ -34,6 +36,12 @@ async def lifespan(app: FastAPI):
     logger.info("ArchSpec Agent Service Starting...")
     logger.info("=" * 60)
     logger.info("API routes registered successfully")
+    # 初始化记忆表
+    try:
+        ensure_memory_table()
+        logger.info("Memory table initialized")
+    except Exception as e:
+        logger.warning(f"Memory table init failed (non-fatal): {e}")
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -94,6 +102,7 @@ app.include_router(rag_router)
 app.include_router(file_router)
 app.include_router(workflow_router)
 app.include_router(template_router)
+app.include_router(memory_router)
 
 
 @app.get('/agent/test')

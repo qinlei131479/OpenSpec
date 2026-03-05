@@ -20,7 +20,8 @@ import {
   EditPen,
   Setting,
   Close,
-  View
+  View,
+  Coin
 } from '@element-plus/icons-vue';
 import MarkdownRenderer from './MarkdownRenderer.vue';
 import { workflowChatStream } from '../service/workflow';
@@ -304,14 +305,21 @@ const handleTemplateChange = async (val) => {
         professionTagId: props.projectInfo?.professionTagId,
         businessTypeTagId: props.projectInfo?.businessTypeTagId,
         threshold: 0.3,
-        limit: 1
+        limit: 15
       });
 
       if (result.code === 200 && result.data?.matched) {
+        // 优先查找与所选模板匹配的结果
         const matched = result.data.matched;
-        // 检查匹配结果是否属于所选模板
         if (matched.templateId === val) {
           chapterTemplateText.value = matched.chunkContent;
+          return;
+        }
+        // 在备选项中查找所选模板
+        const alternatives = result.data.alternatives || [];
+        const alt = alternatives.find(a => a.templateId === val);
+        if (alt) {
+          chapterTemplateText.value = alt.chunkContent;
           return;
         }
       }
@@ -521,6 +529,8 @@ const handleGenerate = async () => {
         project_info: projectInfoText.value,
         user_id: userId,
         enable_audit: enableAudit.value,  // 传递校验开关状态
+        chapter_name: props.currentChapter?.title || undefined,
+        additional_requirements: additionalRequirements.value.trim() || undefined,
         profession_tag_id: props.projectInfo?.professionTagId,      // 标签：专业
         business_type_tag_id: props.projectInfo?.businessTypeTagId,  // 标签：业态
       },
@@ -535,6 +545,17 @@ const handleGenerate = async () => {
           // 实时发送流式内容到 MarkdownEditor
           emit('content-streaming', fullContent);
         }
+
+        // 补救机制：如果 generate 节点的内容全部在思考链中（无 token 事件），
+        // 从 timeline_step 的 thought 字段中提取内容
+        if (event.event === 'timeline_step' &&
+            event.data.node === 'generate' &&
+            event.data.status === 'completed' &&
+            event.data.thought &&
+            !fullContent) {
+          fullContent = event.data.thought;
+          emit('content-streaming', fullContent);
+        }
       },
       abortController.value.signal
     );
@@ -542,7 +563,6 @@ const handleGenerate = async () => {
     // 5. 生成完成后自动应用到编辑器
     if (fullContent) {
       emit('content-generated', fullContent);
-      ElMessage.success('章节内容已生成并应用到编辑器');
     }
 
   } catch (error) {
@@ -841,6 +861,35 @@ const handleEvent = (msg, type, data) => {
   } else if (type === 'session_start') {
     // 会话开始事件 - 可用于重置状态或记录
     console.log('Session started at:', data.timestamp);
+
+  } else if (type === 'memory_recalled') {
+    // 记忆召回事件 - 显示系统参考了哪些历史偏好
+    const memories = data.memories || [];
+    if (memories.length > 0) {
+      const memoryStep = {
+        id: `memory_recalled_${Date.now()}`,
+        title: `已参考 ${memories.length} 条历史偏好`,
+        status: 'completed',
+        expanded: false,
+        toolCallsExpanded: false,
+        thought: '',
+        details: memories.map(m => {
+          const chapter = m.chapter_name ? `[${m.chapter_name}]` : '';
+          return `${chapter} ${m.content}`;
+        }),
+        toolCalls: [],
+        result: null,
+        error: null,
+        timestamp: Date.now(),
+        backendStatus: 'completed',
+        duration: 0,
+        isMemoryStep: true
+      };
+      msg.steps.unshift(memoryStep);
+      // 重建 stepIdToIndex 映射（因为 unshift 改变了索引）
+      stepIdToIndex.value.clear();
+      msg.steps.forEach((s, i) => stepIdToIndex.value.set(s.id, i));
+    }
 
   } else if (type === 'done') {
     // 会话结束 - 确保所有步骤都已完成
@@ -1244,13 +1293,13 @@ onBeforeUnmount(() => {
             <!-- Timeline Steps -->
             <div v-if="msg.steps.length > 0" class="timeline-container">
               <div v-for="step in msg.steps" :key="step.id" class="timeline-step">
-                <div :class="['step-main', stepColorClass(step.status)]" @click="toggleStep(step)">
+                <div :class="['step-main', step.isMemoryStep ? 'step-memory' : stepColorClass(step.status)]" @click="toggleStep(step)">
                   <div class="step-left">
                     <el-icon
                       :class="['step-status-icon', step.status]"
                       :size="14"
                     >
-                      <component :is="stepIconForStatus(step.status)" />
+                      <component :is="step.isMemoryStep ? 'Coin' : stepIconForStatus(step.status)" />
                     </el-icon>
                     <span class="step-title">{{ step.title }}</span>
                   </div>
@@ -1270,6 +1319,13 @@ onBeforeUnmount(() => {
                 <!-- Expanded Details -->
                 <transition name="expand">
                   <div v-if="step.expanded" class="step-details">
+                    <!-- Memory Details (记忆召回详情) -->
+                    <div v-if="step.isMemoryStep && step.details" class="memory-details">
+                      <div v-for="(detail, idx) in step.details" :key="idx" class="memory-detail-item">
+                        {{ detail }}
+                      </div>
+                    </div>
+
                     <!-- Tool Calls Section (工具调用) -->
                     <div v-if="step.toolCalls && step.toolCalls.length > 0" class="tool-calls-section">
                       <!-- 工具调用摘要（可点击展开） -->
@@ -2125,6 +2181,32 @@ onBeforeUnmount(() => {
 .step-error {
   border-left: 3px solid #dc2626;
   background: linear-gradient(90deg, rgba(220, 38, 38, 0.04) 0%, transparent 100%);
+}
+
+/* Memory recall step - 紫色主题区分 */
+.timeline-step:has(.step-main[data-memory]) {
+  border-color: #7c3aed;
+}
+
+.timeline-step .step-main.step-memory {
+  border-left: 3px solid #7c3aed;
+  background: linear-gradient(90deg, rgba(124, 58, 237, 0.06) 0%, transparent 100%);
+}
+
+/* Memory details */
+.memory-details {
+  padding: 8px 0;
+}
+
+.memory-detail-item {
+  padding: 6px 12px;
+  margin: 4px 0;
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.5;
+  border-left: 2px solid #c4b5fd;
+  background: rgba(124, 58, 237, 0.03);
+  border-radius: 0 4px 4px 0;
 }
 
 /* ============================================

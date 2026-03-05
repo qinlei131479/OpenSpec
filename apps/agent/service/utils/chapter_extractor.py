@@ -139,14 +139,28 @@ class ChapterExtractor:
         normalized = cls._normalize_content(content)
         lines = normalized.split('\n')
 
-        # 清理标题，移除可能的标点
+        # 清理标题，移除可能的标点和章节号前缀
         clean_title = title.strip().rstrip('：:')
+        clean_title = re.sub(r'^#+\s*', '', clean_title)
+        clean_title = re.sub(r'^\d+(?:\.\d+)*\s*[\.、\s]*', '', clean_title)
 
+        # 第一轮：精确子串匹配
         for line in lines:
             if clean_title in line:
                 chapter_num = cls._detect_chapter_number(line)
                 if chapter_num:
                     return chapter_num
+
+        # 第二轮：按顿号/逗号拆分标题关键词，匹配包含主要关键词的行
+        keywords = re.split(r'[、，,]', clean_title)
+        keywords = [k.strip() for k in keywords if len(k.strip()) >= 2]
+        if keywords:
+            for line in lines:
+                matched_count = sum(1 for kw in keywords if kw in line)
+                if matched_count >= max(1, len(keywords) // 2):
+                    chapter_num = cls._detect_chapter_number(line)
+                    if chapter_num:
+                        return chapter_num
 
         return None
 

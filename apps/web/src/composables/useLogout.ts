@@ -26,7 +26,7 @@ export function useLogout(): UseLogoutReturn {
     try {
       authStorage.clearAll();
       ElMessage.success('已退出登录');
-      router.push('/login');
+      router.push('/home');
     } finally {
       loading.value = false;
     }

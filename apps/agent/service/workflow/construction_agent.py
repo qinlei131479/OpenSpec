@@ -668,6 +668,7 @@ def generate_node(state: AgentState, config: RunnableConfig):
     streaming_llm = ChatTongyi(model="qwen-max", temperature=0.1, streaming=True)
 
     try:
+        # 使用 invoke 并传递 config，让 astream_events 捕获流式输出
         response = streaming_llm.invoke([HumanMessage(content=full_prompt)], config)
     except ValueError as e:
         if "Range of input length" in str(e):

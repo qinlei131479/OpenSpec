@@ -142,6 +142,48 @@ export interface ExportMarkdownData {
 }
 
 /**
+ * 根据文档ID获取文档详情
+ * @param documentId 文档ID
+ * @returns Promise<ApiResponse<DocumentData>>
+ */
+export async function getDocumentById(
+  documentId: string
+): Promise<ApiResponse<DocumentData>> {
+  const url = `${API_BASE_URL}/documents/${documentId}`
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        authStorage.clearAll()
+        redirectToLogin()
+        throw new Error('未授权，请重新登录')
+      }
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result: ApiResponse<DocumentData> = await response.json()
+
+    if (result.code === 200) {
+      return result
+    } else {
+      throw new Error(result.message || '获取文档详情失败')
+    }
+  } catch (error) {
+    console.error('获取文档详情接口失败:', error)
+    return {
+      code: 500,
+      message: error instanceof Error ? error.message : '未知错误',
+      data: null
+    }
+  }
+}
+
+/**
  * 获取文档列表
  * @param params 查询参数
  * @returns Promise<ApiResponse<DocumentListData>>
@@ -523,7 +565,7 @@ export async function exportDocumentMarkdown(
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: getAuthHeaders()
     })
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     const result: ApiResponse<ExportMarkdownData> = await response.json()
